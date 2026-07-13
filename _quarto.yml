@@ -1,0 +1,43 @@
+project:
+  type: website
+  output-dir: _site
+  # Only these locations are scanned for .qmd / .ipynb to render.
+  render:
+    - index.qmd
+    - notebooks/*.ipynb
+
+# Cache executed notebook outputs so unchanged notebooks aren't re-run every build.
+execute:
+  freeze: auto
+
+website:
+  title: "Green Gap Affordable Housing"
+  description: "Spatial analysis of the green gap in affordable housing across DC & MD."
+  site-url: "https://alibishokputov.github.io/green-gap-affordable-housing/"
+  repo-url: "https://github.com/alibishokputov/green-gap-affordable-housing"
+  repo-actions: [source, issue]
+  page-navigation: true
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - text: Notebooks
+        menu:
+          - href: notebooks/1.0-example-green-gap-demo.ipynb
+            text: "1.0 — Green gap demo (plotnine + bivariate map)"
+    right:
+      - icon: github
+        href: "https://github.com/alibishokputov/green-gap-affordable-housing"
+        aria-label: GitHub
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    code-tools: true
+    code-copy: true
+    embed-resources: false
+    fig-width: 8
+    fig-height: 5

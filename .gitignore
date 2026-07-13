@@ -173,11 +173,33 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Cursor  
-#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to 
+# Cursor
+#  Cursor is an AI-powered code editor.`.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
 
-data/
+# Quarto
+/_site/
+/.quarto/
+# _freeze/ caches executed notebook output; commit it so CI can skip re-running
+# heavy geospatial notebooks. Remove the leading '#' on the next line to ignore it instead.
+# /_freeze/
+
+# uv
+.venv/
+
+# macOS
+.DS_Store
+
+# ---- Data ----
+# Ignore everything under data/ (large rasters, parcels, etc.)...
+data/*
+# ...but keep the directory scaffolding tracked.
+!data/raw/
+!data/interim/
+!data/processed/
+!data/external/
+!data/**/.gitkeep
+**/*.quarto_ipynb

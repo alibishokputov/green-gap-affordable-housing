@@ -1,0 +1,89 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "greengap"
+version = "0.0.1"
+description = "Spatial analysis of the green gap in affordable housing (DC & MD): parcels, land cover/land use, LIHTC & NHPD."
+authors = [
+  { name = "Alibi Shokputov" },
+]
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+requires-python = "~=3.12.0"
+
+dependencies = [
+    # ---- core data science ----
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-learn",
+    "pyarrow",           # fast parquet / arrow IO
+    "openpyxl",          # read the .xlsx data dictionaries / NHPD
+    "tqdm",
+    "loguru",
+    "python-dotenv",
+    "typer",
+
+    # ---- vector geospatial ----
+    "geopandas",
+    "shapely",
+    "pyogrio",           # fast vector IO backend for geopandas
+    "pyproj",
+    "fiona",
+    "mapclassify",       # classification schemes (used for bivariate binning & choropleths)
+    "libpysal",          # spatial weights (neighbors, contiguity)
+    "esda",              # exploratory spatial data analysis (Moran's I, LISA)
+
+    # ---- raster & satellite imagery ----
+    "rasterio",
+    "rioxarray",
+    "xarray",
+    "dask",              # out-of-core arrays for large land-cover rasters
+    "rasterstats",       # zonal statistics (raster x parcel polygons)
+    "geocube",           # rasterize vectors / align to raster grids
+
+    # ---- basemaps & tiles ----
+    "contextily",        # static basemap tiles for matplotlib/geopandas maps
+
+    # ---- static visualization ----
+    "matplotlib",
+    "plotnine",          # grammar-of-graphics (ggplot-style) charts
+
+    # ---- interactive maps & plots ----
+    "folium",            # leaflet interactive maps
+    "plotly",            # interactive charts
+    "leafmap",           # high-level interactive geospatial mapping
+    "mapclassify",       # (also drives choropleth binning in folium/geopandas explore)
+
+    # ---- notebooks ----
+    "jupyterlab",
+    "notebook",
+    "ipython",
+    "ipykernel",
+    "ipywidgets",        # interactive widgets in leafmap / notebooks
+    "nbformat",
+    "nbclient",          # notebook execution (used by quarto)
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "pytest",
+    "jupyterlab",
+]
+
+[tool.ruff]
+line-length = 99
+src = ["greengap"]
+include = ["pyproject.toml", "greengap/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["greengap"]
+force-sort-within-sections = true
