@@ -1,0 +1,325 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<metadata>
+  <idinfo>
+    <citation>
+      <citeinfo>
+        <origin>Chesapeake Bay Program</origin>
+        <pubdate>20230228</pubdate>
+        <title>Chesapeake Bay Land Use and Land Cover (LULC) Database 2022 Edition</title>
+        <edition>2022</edition>
+        <geoform>raster digital data</geoform>
+        <onlink>https://doi.org/10.5066/P981GV1L</onlink>
+      </citeinfo>
+    </citation>
+    <descript>
+      <abstract>The Chesapeake Bay Land Use and Land Cover Database (LULC) facilitates characterization of the landscape and land change for and between discrete time periods. The database was developed by the University of Vermont’s Spatial Analysis Laboratory in cooperation with Chesapeake Conservancy (CC) and U.S. Geological Survey (USGS) as part of a 6-year Cooperative Agreement between Chesapeake Conservancy and the U.S. Environmental Protection Agency (EPA) and a separate Interagency Agreement between the USGS and EPA to provide geospatial support to the Chesapeake Bay Program Office.
+
+The database contains one-meter 13-class Land Cover (LC) and 54-class Land Use/Land Cover (LULC) for all counties within or adjacent to the Chesapeake Bay watershed for 2013/14 and 2017/18, depending on availability of National Agricultural Imagery Program (NAIP) imagery for each state. Additionally, 54 LULC classes are generalized into 18 LULC classes for ease of visualization and communication of LULC trends. LC change between discrete time periods, detected by spectral changes in NAIP imagery and LiDAR, represents changes between the 12 land cover classes. LULC change uses LC change to identify where changes are happening and then LC is translated to LULC to represent transitions between the 54 LULC classes. The LULCC data is represented as a LULC class change transition matrix which provides users acres of change between multiple classes. It is organized by 18x18 and 54x54 LULC classes. The Chesapeake Bay Water (CBW) indicates raster tabulations were performed for only areas that fall inside the CBW boundary e.g., if user is interested in CBW portion of a county then they will use LULC Matrix CBW. Conversely, if they are interested change transitions across the entire county, they will use LULC Matrix.
+
+The database includes the following data:
+1. 2013/2014 Land Cover (LC)
+2. 2017/2018 Land Cover (LC) 
+3. 2013/2014 to 2017/2018 Land Cover Change (LCC)
+4. 2013/2014 Land Use and Land Cover (LULC)
+5. 2017/2018 Land Use and Land Cover (LULC)
+6. 2013/2014 to 2017/2018 Land Use and Land Cover Change (LULCC) and LULCC matrices
+
+To start using the data please refer to the data_dictionary_2022-Edition.pdf (see under Attached Files). 
+
+How to cite:
+
+When using the Chesapeake Bay Land Use/Land Cover Database or producing derivatives, the data must be properly cited based on the following criteria.
+
+Citing Entire Data Release
+Chesapeake Bay Program, 2023, Chesapeake Bay Land Use and Land Cover Database 2022 Edition: U.S. Geological Survey data release, https://doi.org/10.5066/P981GV1L.
+
+Citing Land Cover (LC) and/or Land Cover Change (LCC) Products
+Chesapeake Bay Program, 2023, Chesapeake Bay Land Use and Land Cover Database 2022 Edition: Land Cover: U.S. Geological Survey data release. Developed by the University of Vermont Spatial Analysis Lab, Chesapeake Conservancy, and U.S. Geological Survey, https://doi.org/10.5066/P981GV1L.
+
+Citing Land Use/Land Cover (LULC) Products
+Chesapeake Bay Program, 2023, Chesapeake Bay Land Use and Land Cover Database 2022 Edition: Land Use/Land Cover: U.S. Geological Survey data release. Developed by the Chesapeake Conservancy, U.S. Geological Survey and University of Vermont Spatial Analysis Lab, https://doi.org/10.5066/P981GV1L.
+
+Citing Land Use/Land Cover Change (LULCC) Products
+Chesapeake Bay Program, 2023, Chesapeake Bay Land Use and Land Cover Database 2022 Edition: Land Use/Land Cover Change: U.S. Geological Survey data release. Developed by the U.S. Geological Survey, Chesapeake Conservancy, and University of Vermont Spatial Analysis Lab, https://doi.org/10.5066/P981GV1L.
+
+Citing Data Dictionary
+Chesapeake Bay Program, 2023, Chesapeake Bay Land Use and Land Cover Database 2022 Edition – Data Dictionary for the Chesapeake Bay Land Use/Land Cover Database, 2022 Edition: U.S. Geological Survey data release, https://doi.org/10.5066/P981GV1L.</abstract>
+      <purpose>The database was produced to inform effects of land use and land cover change on the water quality in the Chesapeake Bay watershed by providing states, counties and local jurisdictions with detailed and consistent land use information to make data-driven and effective management decisions.  The products were developed to be broadly used for informing both conservation and restoration efforts decisions such as habitat suitability assessments, riparian buffer implementation, agriculture and forest conservation, and tracking the conversion of forests and farmlands to other uses.</purpose>
+    </descript>
+    <timeperd>
+      <timeinfo>
+        <rngdates>
+          <begdate>2013</begdate>
+          <enddate>2018</enddate>
+        </rngdates>
+      </timeinfo>
+      <current>ground condition</current>
+    </timeperd>
+    <status>
+      <progress>Complete</progress>
+      <update>Irregular</update>
+    </status>
+    <spdom>
+      <bounding>
+        <westbc>-81.1084</westbc>
+        <eastbc>-73.2910</eastbc>
+        <northbc>44.7208</northbc>
+        <southbc>36.2129</southbc>
+      </bounding>
+    </spdom>
+    <keywords>
+      <theme>
+        <themekt>ISO 19115 Topic Category</themekt>
+        <themekey>imageryBaseMapsEarthCover</themekey>
+      </theme>
+      <theme>
+        <themekt>USGS Thesaurus</themekt>
+        <themekey>land use and land cover</themekey>
+        <themekey>land use change</themekey>
+        <themekey>maps and atlases</themekey>
+        <themekey>land change</themekey>
+      </theme>
+      <theme>
+        <themekt>USGS Metadata Identifier</themekt>
+        <themekey>USGS:633302d8d34e900e86c61f81</themekey>
+      </theme>
+      <place>
+        <placekt>Common geographic areas</placekt>
+        <placekey>Chesapeake</placekey>
+        <placekey>Maryland</placekey>
+        <placekey>Delaware</placekey>
+        <placekey>District of Columbia</placekey>
+        <placekey>Pennsylvania</placekey>
+        <placekey>New York</placekey>
+        <placekey>Virginia</placekey>
+        <placekey>West Virginia</placekey>
+      </place>
+    </keywords>
+    <accconst>None.  Please see 'Distribution Info' for details.</accconst>
+    <useconst>The organizations responsible for generating and funding this dataset make no representations of any kind including, but not limited to the warranties of merchantability or fitness for a particular use, nor are any such warranties to be implied with respect to the data. The data is provided on the condition that neither the USGS nor the U.S. Government, or any of the collaborating organizations shall be held liable for any damages resulting from the authorized or unauthorized use of the data. Although every effort has been made to ensure the accuracy of information, errors may be reflected in data supplied. Possible errors or limitations of the data have been documented but the list is not exhaustive. The user must be aware of data conditions and bear responsibility for the appropriate use of the information with respect to possible errors, original map scale, collection methodology, currency of data, and other conditions. Credit should always be given to the data source when this data is transferred, altered, or used for analysis.</useconst>
+    <ptcontac>
+      <cntinfo>
+        <cntperp>
+          <cntper>Labeeb Ahmed</cntper>
+          <cntorg>U.S. Geological Survey, SOUTHEAST REGION</cntorg>
+        </cntperp>
+        <cntpos>Geographer</cntpos>
+        <cntaddr>
+          <addrtype>mailing address</addrtype>
+          <address>US EPA Chesapeake Bay Program</address>
+          <city>Annapolis</city>
+          <state>MD</state>
+          <postal>21401</postal>
+          <country>US</country>
+        </cntaddr>
+        <cntvoice>410-267-5715</cntvoice>
+        <cntemail>lahmed@usgs.gov</cntemail>
+      </cntinfo>
+    </ptcontac>
+    <datacred>Funding provided by U.S. Environmental Protection Agency Chesapeake Bay Program. 
+Cooperative participants: University of Vermont Spatial Analysis Laboratory, Chesapeake Conservancy &amp; U.S. Geological Survey.</datacred>
+  </idinfo>
+  <dataqual>
+    <attracc>
+      <attraccr>Evaluating accuracy of land use and land cover and its change classes is exceptionally challenging considering the spatial and categorical resolution of the data. However, various steps have been taken to ensure accuracy including consideration of the best available ancillary datasets corresponding to specific time intervals to inform mapping classifications and extensive visual inspections of the data by multiple team members to address issues such as large area or systematic misclassifications. Additionally, automated workflows were developed to track and capture certain erroneous classifications in the workflows.
+
+There is a separate and on-going effort to perform an accuracy assessment of the mapped land cover classes with an estimated delivery in 2023.</attraccr>
+    </attracc>
+    <logic>The original data was processed at a county-scale and then a state mosaic was created for the data release.  The values, classes and legends in the state-wide mosaics are consistent with those provided for the data for individual counties. Please refer to the overview and methods document for more details.</logic>
+    <complete>Dataset is considered complete for the information presented, as described in the abstract. Users are advised to read the entire metadata record carefully for additional details.</complete>
+    <posacc>
+      <horizpa>
+        <horizpar>No formal positional accuracy tests were conducted</horizpar>
+      </horizpa>
+      <vertacc>
+        <vertaccr>No formal positional accuracy tests were conducted</vertaccr>
+      </vertacc>
+    </posacc>
+    <lineage>
+      <procstep>
+        <procdesc>These are brief descriptions of the processing steps (listed in order of operations): 
+
+(1) land cover (LC) 2013/14
+(2) land cover (LC) 2017/2018
+(3) land cover change (LCC) 2013/14 - 2017/2018
+(4) land use/land cover (LULC) 2017/2018
+(5) land use/land cover change (LULCC) 2013/14 - 2017/2018
+(6) land use/land cover (LULC) 2013/14.
+
+Land Cover 2013/14 (2017 release) is the first iteration of high resolution land cover mapping in the Chesapeake Bay that was completed in 2017.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>Land Cover 2013/2014:
+
+Land-cover change mapping was performed in eCognition, state-of-the-art software for performing object-based image analysis. This expert-system technique segments input datasets into meaningful landscape objects and classifies them according to both their individual characteristics (e.g., vegetation content from spectral imagery, vegetation height from LiDAR) and their relationships to adjacent features. The 2013/14 land cover data (2017 release) for the Chesapeake Bay Watershed was was updated using best available LiDAR, regional building footprints, local planimetric data representing roads and buildings, and 2013/14 NAIP Imagery.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>Land Cover Change 2013/14 to 2017/18:
+
+The 2013/14 land cover data (2017 release) was compared to 2017/18 data inputs such as 2017/18 NAIP, best available LiDAR and local planimetric data. Next, change detection was assessed from 2013/14 to 2017/18 based primarily on multi-date LiDAR imagery, if available, followed by multi-date NAIP imagery (available for all counties). The comparison's focus is on the most important areas of landscape change: 1) tree-canopy loss; and 2) impervious-surfaces gain. The land cover change contains 79 change classes plus the original 13 classes for features that had not changed. Change combinations unlikely to occur in the study area during the analysis period were ignored (e.g., Structures to Scrub\Shrub). The tree-canopy, impervious, and barren change classes were manually-reviewed, edited and incorporated into the draft classification using eCognition. This review draft was then submitted to project stakeholders for further review and comment.
+
+Stakeholder review comments were received in both geographic (e.g., point datasets) and textual form (e.g., descriptions of deficiencies). These comments were in turn reviewed to gauge their scale, frequency, and pertinence. To address errors that would affect moderate-scale (10 meters) analyses of land-use change, vector polygons were manually drawn in ArcPro and assigned "from" and "to" classes that specified how each problem should be corrected. Errors at finer scales (e.g., missing sections of sidewalks or urban driveways) were ignored during this round of review but may be addressed at a later date depending on scale (i.e., sub-meter errors are beyond the scope fo this project) and the quality of the available imagery, LiDAR, and thematic GIS datasets. Lastly, the vector edits were incorporated into the draft classification using eCognition to produce the final land cover change data.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>Land Cover 2017/18:
+
+The 2017/18 land cover is derived from the land cover change 2013/14 to 2017/18, where each change class was reclassified to its 2017/18 class. See steps for land cover change 2013/14 to 2017/18 for more information.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>Land Use/Land Cover 2017/18:
+
+This 54-class land use/land cover data was created by translating land cover to land use using a suite of geospatial models that were developed and deployed on Microsoft Azure platform. The models were written in Python using open-source tools and technologies such as rasterio, geopandas, pandas, and PostgresSQL/PostGIS etc.
+
+(1) Union county tax parcel data with vector image segments derived from National Agriculture Imagery Program (NAIP) imagery using eCognition software, to create the modeling segmentation called "psegs". Each psegs polygon represents a single land cover class. 
+
+(2) Various raster ancillary datasets are summarized by psegs such as county land use, NASS Cropland Data Layer and USGS National Land Cover Database.
+
+(3) Psegs are processed through a series of rule-based geospatial models that use tabulated raster (attribute) and ancillary vector data to classify land use. Examples of vector data includes extractive, landfill, solar fields, transmission lines etc. 
+
+(4) Three separate models produce overlays that are used to classify certain land cover classes such as emergent wetlands, tree canopy and water. These layers are treated separately because their segmentation differs from the psegs. The overlays provide spatial context to create land use classes such as tree canopy: forest, tree canopy over turf grass; wetlands: riverine and terrene wetlands; water: estuarine, lakes and reservoirs, etc.
+
+(5) Finally, the psegs and overlays are rasterized and reconciled using a rule-based approach to final 2017/18 land use/land cover data.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>Land Use/Land Cover Change 2013/14 - 2017/18:
+
+(1) LULC change is produced by back-casting 2013/14 land use where LULC change occurred. The driver of LULC change is the LC Change. LULC change is not limited to LC change but can be located using land cover change and tax parcels.
+
+(2) Build a vector database of LC change and other raster (e.g. CDL and NLCD) information used to classify the 2013/14 land use. 
+
+(3) To classify areas of 2013/14 LULC where LC change occured, a geospatial workflow is applied using 2017/18 LULC for context, along with other ancillary information such as the National Land Cover Database (NLCD) and Cropland Data Layer (CDL). Tax parcels and LC change are used to identify areas of LULC change that are not a change in land cover e.g. Cropland Herbaceous to Turf Grass in a newly developed parcel.
+
+(4) LULC change raster is produced by adding 2013/14 LULC raster values with 2017/18 LULC where change occured e.g. 
+forest (41) to natural succession scrub/shrub (56) = 4156 (forest is 2013/14 and natural succession scrub/shrub is 2017/18).</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>Land Use/Land Cover 2013/14:
+
+The 2013/14 LULC is derived from the LULC change and 2017/18 LULC by 'burning' the 2013/14 LULC change values on to 2017/18 LULC.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>LULC Class Transition Matrices:
+
+Data on LULC change represent transitions of LULC between two time periods: an early date (e.g., Time 1, 2013 or 2014) and a late date (e.g., Time 2, 2017 or 2018). A concise way of illustrating such changes is to construct a cross-tabulation, aka “pivot table”, between the two datasets.  The result is a tabular LULC change matrix that shows all observed changes in the LULC change raster. The early date values (acres of land use X) are represented in rows and the late date values represented in columns. The values along the diagonal are absent because they would represent no change and are not included in the LULC change raster data.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+      <procstep>
+        <procdesc>State/jurisdiction mosaics were created for each product for ease of distribution and packaging for the data release on ScienceBase.</procdesc>
+        <procdate>2022</procdate>
+      </procstep>
+    </lineage>
+  </dataqual>
+  <spdoinfo>
+    <direct>Raster</direct>
+    <rastinfo>
+      <rasttype>Pixel</rasttype>
+    </rastinfo>
+  </spdoinfo>
+  <spref>
+    <horizsys>
+      <planar>
+        <mapproj>
+          <mapprojn>USA Contiguous Albers Conical Equal Area (USGS)</mapprojn>
+          <transmer>
+            <sfctrmer>
+            </sfctrmer>
+            <longcm>-96.0</longcm>
+            <latprjo>23.0</latprjo>
+            <feast>0.0</feast>
+            <fnorth>0.0</fnorth>
+          </transmer>
+        </mapproj>
+        <planci>
+          <plance>coordinate pair</plance>
+          <coordrep>
+            <absres>
+            </absres>
+            <ordres>
+            </ordres>
+          </coordrep>
+          <plandu>meters</plandu>
+        </planci>
+      </planar>
+      <geodetic>
+        <horizdn>North American Datum of 1983 (NAD 83)</horizdn>
+        <ellips>Geodetic Reference System 1980</ellips>
+        <semiaxis>6378137.000000</semiaxis>
+        <denflat>298.257222</denflat>
+      </geodetic>
+    </horizsys>
+  </spref>
+  <eainfo>
+    <overview>
+      <eaover>Please see the data dictionary for detailed information about each file type, file name, attribute name, and attribute description. Data dictionary describes all output files associated with the data release. Column definitions are as follows: File Type, contains the file type; File Name, indicates the file name; Attribute, contains attribute name (when present); Definition, file or attribute definition; Minimum Value, minimum value of attribute (where present); Maximum Value, max value of attribute (where present) and NoData Values. Unit area in in acres unless otherwise noted.</eaover>
+      <eadetcit>Chesapeake Bay Program, 2023, Chesapeake Bay Land Use and Land Cover Database 2022 Edition: Data Dictionary for the Chesapeake Bay Land Use/Land Cover Database, 2022 Edition : U.S. Geological Survey data release, https://doi.org/10.5066/P981GV1L.</eadetcit>
+    </overview>
+  </eainfo>
+  <distinfo>
+    <distrib>
+      <cntinfo>
+        <cntorgp>
+          <cntorg>U.S. Geological Survey - ScienceBase</cntorg>
+        </cntorgp>
+        <cntaddr>
+          <addrtype>mailing and physical</addrtype>
+          <address>Denver Federal Center, Building 810, Mail Stop 302</address>
+          <city>Denver</city>
+          <state>CO</state>
+          <postal>80225</postal>
+          <country>USA</country>
+        </cntaddr>
+        <cntvoice>1-888-275-8747</cntvoice>
+        <cntemail>sciencebase@usgs.gov</cntemail>
+      </cntinfo>
+    </distrib>
+    <distliab>Unless otherwise stated, all data, metadata and related materials are considered to satisfy the quality standards relative to the purpose for which the data were collected. Although these data and associated metadata have been reviewed for accuracy and completeness and approved for release by the U.S. Geological Survey (USGS), no warranty expressed or implied is made regarding the display or utility of the data for other purposes, nor on all computer systems, nor shall the act of distribution constitute any such warranty.</distliab>
+    <stdorder>
+      <digform>
+        <digtinfo>
+          <formname>Digital Data</formname>
+        </digtinfo>
+        <digtopt>
+          <onlinopt>
+            <computer>
+              <networka>
+                <networkr>https://doi.org/10.5066/P981GV1L</networkr>
+              </networka>
+            </computer>
+          </onlinopt>
+        </digtopt>
+      </digform>
+      <fees>None</fees>
+    </stdorder>
+  </distinfo>
+  <metainfo>
+    <metd>20230228</metd>
+    <metc>
+      <cntinfo>
+        <cntperp>
+          <cntper>Labeeb Ahmed</cntper>
+          <cntorg>U.S. Geological Survey, Lower-Mississippi Gulf Water Science Center</cntorg>
+        </cntperp>
+        <cntpos>Geographer</cntpos>
+        <cntaddr>
+          <addrtype>mailing address</addrtype>
+          <address>US EPA Chesapeake Bay Program</address>
+          <city>Annapolis</city>
+          <state>MD</state>
+          <postal>21403</postal>
+          <country>US</country>
+        </cntaddr>
+        <cntvoice>410-267-5715</cntvoice>
+        <cntemail>lahmed@usgs.gov</cntemail>
+      </cntinfo>
+    </metc>
+    <metstdn>FGDC Content Standard for Digital Geospatial Metadata</metstdn>
+    <metstdv>FGDC-STD-001-1998</metstdv>
+  </metainfo>
+</metadata>

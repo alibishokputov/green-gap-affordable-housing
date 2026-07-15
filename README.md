@@ -56,6 +56,108 @@ two variables at once on a 3×3 color grid) that works with folium, geopandas `.
 matplotlib, or plotly. See `notebooks/1.0-example-green-gap-demo.ipynb` for a worked
 example crossing *green-space share* × *affordable-housing units*.
 
+## Green-gap dashboard (Shiny)
+
+An interactive **tree canopy % × LIHTC affordable units** bivariate map at census-tract
+level for **Maryland + Washington, DC** (1,666 mapped tracts).
+
+**Published (no server, no install):** `https://<user>.github.io/green-gap-affordable-housing/dashboard/`
+
+Run it locally:
+
+```bash
+uv run python -m greengap.dataset build   # one-time: builds the analysis table (~20 min)
+uv run shiny run app/app.py               # then open http://127.0.0.1:8000
+```
+
+### How it's published
+
+`scripts/build_shinylive.py` compiles the app to **WebAssembly** (shinylive), so it runs
+entirely in the reader's browser and is served as static files from GitHub Pages — no server,
+no runtime limits, nothing to keep awake. The Pages workflow builds it into `_site/dashboard`
+on every push to `main`.
+
+```bash
+# rebuild the dashboard's data after re-running the pipeline, then commit it
+uv run python scripts/build_shinylive.py --refresh-data --out _site/dashboard
+python3 -m http.server --directory _site/dashboard 8000   # preview the static build
+```
+
+`app/tracts.geojson` (1.9 MB) is **committed on purpose** — it is the hand-off between the local
+pipeline and the published site, because CI cannot rebuild it (that needs the 2.4 GB rasters and
+a ~20-minute extraction). Regenerate it with `--refresh-data` whenever the analysis table
+changes, and commit the result.
+
+> ### Pyodide constraints — read before editing `app/app.py`
+>
+> The app runs in the browser, which rules out things that work fine locally. These are not
+> style preferences; each one was a blank page:
+>
+> - **No `matplotlib`.** Importing it starts a font-cache build that never completes (measured
+>   >330 s with no first paint). Every chart is HTML/CSS or inline SVG instead.
+> - **No `mapclassify`** — it imports matplotlib at module scope, so it triggers the same hang.
+>   `greengap/classify.py` reimplements the three schemes with numpy only, and
+>   `tests/test_classify.py` pins it to mapclassify's results so the published map and the local
+>   map cannot diverge.
+> - **No `pyarrow`** → no `read_parquet` in the browser. The app reads bundled GeoJSON via
+>   `GeoDataFrame.from_features` (shapely only, no GDAL).
+> - **No `greengap.config`** — it pulls in `dotenv`/`loguru`.
+> - **No `union_all()`** on the tract geometries: GEOS raises a TopologyException on
+>   simplification artefacts, which *hard-crashes* the WASM runtime rather than raising.
+> - Declare **every transitive dependency** in the build script's `REQUIREMENTS`; shinylive
+>   resolves none of them (folium alone needs branca, jinja2, xyzservices and requests).
+>
+> The build script asserts the no-matplotlib invariant and fails loudly if it is ever broken.
+> First paint is currently ~11 s; re-measure it if you add a dependency.
+
+The dashboard has a bivariate map, a joint-distribution heatmap, a scatter with an OLS fit,
+and a filtered table of **green-gap tracts** (high LIHTC / low canopy — the argument of the
+study). Controls: county filter, canopy definition, LIHTC measure, classification scheme,
+palette, and whether breaks are computed on the visible selection or the whole state.
+
+### The data pipeline
+
+`greengap/dataset.py` builds the analysis table in cached steps:
+
+| Step | What | Output |
+|------|------|--------|
+| `tracts` | TIGER census tracts + county names (MD + DC) | `data/interim/tracts.parquet` |
+| `lihtc` | LIHTC points → summed to tracts | `data/interim/lihtc_by_tract.parquet` |
+| `canopy` | 1 m Chesapeake land cover → per-tract class fractions (`exactextract`) | `data/interim/canopy_by_tract_{24,11}.parquet` |
+| `build` | join of the above | `data/processed/tract_canopy_lihtc.parquet` |
+
+Run any step alone (`uv run python -m greengap.dataset canopy --state 11`). The MD raster is
+2.4 GB at 1 m, so `canopy` is the slow step (~20 min for MD; DC takes 8 s) — it caches
+per-state so you only pay once, and `build --force` deliberately will **not** re-trigger it
+(use `--force-upstream` for that). Pass `--raster /path/to/extracted.tif` to skip reading
+inside the zip.
+
+**Four things worth knowing about the data:**
+
+- **Use the national LIHTC file, not `LIHTC.csv`.** The bundled CSV is a Maryland-only extract
+  (948 MD rows, **zero DC**). The pipeline instead reads HUD's national database from
+  `data/raw/lihtc.zip` (`LIHTCPUB.xlsx`), which has MD 948 + **DC 268**. `openpyxl` cannot
+  parse it (HUD emits a `synchVertical` attribute it rejects), hence the `calamine` engine.
+- **Use HUD's imputed unit columns.** Raw `li_units` has 27 nulls, which `sum()` skips
+  silently — a ~2,200-unit undercount. The pipeline uses `li_unitr`/`n_unitsr` (0 nulls), as
+  HUD's data dictionary instructs.
+- **Canopy definition matters.** The Chesapeake land cover splits canopy across four classes
+  (3 = Tree Canopy; 10/11/12 = canopy over structures / other impervious / roads). The default
+  `canopy_pct` counts all four (standard urban-tree-canopy practice) and divides by
+  **classified land area** (water *and* nodata excluded). Counting only class 3 undercounts
+  canopy by up to ~3× in dense urban tracts — exactly where LIHTC concentrates. Both
+  definitions are in the app so you can test sensitivity.
+- **15 tracts have no measurable canopy** and are excluded: open-water tracts (Census `99xxxx`
+  series) and military land, which the Chesapeake raster leaves as nodata (Aberdeen Proving
+  Ground, Joint Base Andrews). They are flagged by `canopy_reliable`. Validation: area-weighted
+  canopy comes to 34.9% for DC (published UTC ≈ 38%, and our land cover is the 2017 edition)
+  and 49.8% for MD.
+
+> **Classification gotcha:** ~70% of tracts have zero LIHTC. Quantile breaks therefore put both
+> cut points at 0, collapsing the LIHTC axis to two classes and **emptying the high-LIHTC
+> corner the study is about** (statewide: 22 green-gap tracts under natural breaks vs **0**
+> under quantiles). Natural breaks is the default; the app warns if quantiles degenerate.
+
 ## Project organization
 
 ```
@@ -73,11 +175,18 @@ example crossing *green-space share* × *affordable-housing units*.
 │   └── publish.yml    <- Render + deploy to GitHub Pages
 │
 ├── data               <- Not committed (see .gitignore); only the folder scaffold is tracked
-│   ├── raw            <- Original, immutable dumps (parcels, land cover/use rasters, LIHTC, NHPD)
-│   ├── external       <- Third-party sources
+│   ├── raw            <- Original, immutable study inputs (parcels, LIHTC, NHPD)
+│   ├── external       <- Third-party sources (Chesapeake LULC rasters; Landsat exports under gee/)
 │   ├── interim        <- Intermediate transformed data
 │   └── processed      <- Final, canonical datasets for analysis
 │
+├── app                <- Shiny dashboard (bivariate canopy x LIHTC map)
+│   ├── app.py           `uv run shiny run app/app.py`; also compiled to WASM
+│   └── tracts.geojson   Committed on purpose: the dashboard's data (CI can't rebuild it)
+├── scripts
+│   └── build_shinylive.py  <- Compiles the dashboard to static WASM for GitHub Pages
+├── gee                <- Google Earth Engine scripts (Landsat summer environmental rasters)
+│                         + README; outputs land in data/external/gee/
 ├── notebooks          <- Analysis notebooks (published to the site). Naming:
 │                         <number>-<initials>-<short-description>.ipynb
 ├── references         <- Data dictionaries, manuals, provenance
@@ -87,9 +196,11 @@ example crossing *green-space share* × *affordable-housing units*.
 │
 ├── greengap           <- Source package
 │   ├── config.py      <- Paths (PROJ_ROOT, RAW_DATA_DIR, ...) + logging
-│   ├── dataset.py     <- Data loading / processing entry point
+│   ├── dataset.py     <- Tract/LIHTC/canopy pipeline (typer CLI)
+│   ├── gee.py         <- Earth Engine workflow in Python (typer CLI)
 │   ├── features.py    <- Feature engineering
 │   ├── bivariate.py   <- Bivariate choropleth helpers
+│   ├── classify.py    <- numpy-only class breaks (mapclassify can't run in the browser)
 │   ├── plots.py       <- Figure generation
 │   └── modeling/      <- train.py / predict.py
 └── tests              <- pytest suite

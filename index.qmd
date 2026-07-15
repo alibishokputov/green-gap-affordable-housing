@@ -15,6 +15,19 @@ The analysis combines:
 - **Land cover / land use** — DC & MD raster editions (2017–2022 / 2018–2022)
 - **Affordable housing** — LIHTC and NHPD (National Housing Preservation Database)
 
+## Interactive dashboard
+
+**[→ Green Gap dashboard](dashboard/)** — an interactive bivariate map of **tree canopy % ×
+LIHTC affordable units** across 1,666 census tracts in Maryland and Washington, DC.
+
+Canopy comes from the 1 m Chesapeake Bay land cover (all four tree-canopy classes, as a share
+of classified land area); affordable housing comes from HUD's national LIHTC database. Filter
+by jurisdiction, switch the canopy/LIHTC measures and classification scheme, and read off the
+**green-gap tracts** — the least-green places carrying the most affordable housing.
+
+The dashboard runs entirely in your browser (WebAssembly), so there is no server and nothing to
+install.
+
 ## Notebooks
 
 - [1.0 — Green gap demo](notebooks/1.0-example-green-gap-demo.ipynb):
@@ -35,5 +48,8 @@ uv run quarto preview
 
 ## Data
 
-Raw data lives under `data/raw/` and is **not** committed to the repository (see `.gitignore`).
-See `data/Green-Gap-Data-Sources.xlsx` and `references/` for provenance and data dictionaries.
+Raw data lives under `data/raw/` (study inputs) and `data/external/` (third-party rasters), and
+is **not** committed to the repository (see `.gitignore`). The one exception is
+`app/tracts.geojson`, the small derived table the dashboard reads — CI cannot rebuild it,
+since that needs the 2.4 GB land-cover rasters. See `references/` for provenance and data
+dictionaries.

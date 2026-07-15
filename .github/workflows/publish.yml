@@ -1,4 +1,4 @@
-name: Publish Quarto site
+name: Publish Quarto site + dashboard
 
 on:
   push:
@@ -36,6 +36,14 @@ jobs:
 
       - name: Render site
         run: uv run quarto render
+
+      # Compiles app/app.py to WebAssembly into _site/dashboard, so the Shiny
+      # dashboard is served as static files alongside the Quarto pages - no
+      # server to run. Uses the committed app/tracts.geojson: CI cannot rebuild
+      # it (that needs the 2.4 GB rasters), which is why that file is tracked.
+      # Must run AFTER `quarto render`, which writes (and would clobber) _site.
+      - name: Build Shinylive dashboard
+        run: uv run python scripts/build_shinylive.py --out _site/dashboard
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

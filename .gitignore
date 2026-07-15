@@ -194,12 +194,16 @@ cython_debug/
 .DS_Store
 
 # ---- Data ----
-# Ignore everything under data/ (large rasters, parcels, etc.)...
-data/*
-# ...but keep the directory scaffolding tracked.
+# Ignore ALL data payload (large rasters, parcels, exports, etc.) at any
+# depth. Note: re-including a directory (!data/raw/) un-ignores the files
+# inside it, so we must re-ignore their *contents* and then whitelist only
+# the .gitkeep scaffold. Order matters — keep these lines in this sequence.
+data/**
+# Keep the directory scaffolding tracked (folders + their .gitkeep markers).
 !data/raw/
 !data/interim/
 !data/processed/
 !data/external/
+!data/external/gee/
 !data/**/.gitkeep
 **/*.quarto_ipynb
