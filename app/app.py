@@ -6,10 +6,12 @@ Crosses two variables on a 3x3 color grid at block-group level for Maryland + DC
                         (Landsat), tree canopy % (Chesapeake), NDVI or NDBI
     horizontal axis (B) LIHTC units               (HUD LIHTC database)
 
-The interesting cell is the "gap": the most affordable housing in the worst
-environment. Which corner that is flips with the variable's polarity - low
-canopy but high surface temperature - so it is computed from ``ENV_VARS[...]
-["worse"]`` rather than hard-coded (see ``worst_env_row``).
+The corner cell marks where LIHTC and the environmental measure co-locate (most
+LIHTC units + worst environment). Which corner that is flips with the variable's
+polarity - low canopy but high surface temperature - so it is computed from
+``ENV_VARS[...]["worse"]`` (see ``worst_env_row``). Everything here is an
+unconditional association across areal units, with no market-rate comparison; it
+is a descriptive tool, not evidence of disparity or a causal effect.
 
 Run locally::
 
@@ -190,6 +192,15 @@ app_ui = ui.page_sidebar(
         ui.value_box(ui.output_text("corr_label"), ui.output_text("corr")),
         fill=False,
     ),
+    ui.p(
+        "Exploratory tool. Everything shown is an unconditional association across "
+        "areal units — there is no comparison with market-rate housing, and LIHTC "
+        "location largely tracks urban location, so overlap with heat or low canopy "
+        "partly reflects that. Read it as where affordable housing and these "
+        "conditions coincide, not as evidence that LIHTC is treated worse or as a "
+        "causal effect.",
+        class_="text-muted small px-2",
+    ),
     ui.output_ui("note"),
     ui.navset_card_tab(
         ui.nav_panel("Bivariate map", ui.output_ui("map")),
@@ -325,17 +336,20 @@ def server(input, output, session):
         short = {"mean_lst": "Heat", "canopy_pct": "Canopy",
                  "natural_canopy_pct": "Canopy", "mean_ndvi": "NDVI",
                  "mean_ndbi": "Built-up"}.get(input.env_var(), "Env")
-        return f"{short} x LIHTC (Spearman)"
+        return f"{short}-LIHTC rank corr. (unadjusted)"
 
     @render.text
     def corr():
+        # Spearman rho only, no significance star. With 1,000+ areal units a rank
+        # correlation clears p<0.05 almost regardless of the true relationship, so
+        # the star is a large-n artifact, not information. This is an unconditional
+        # association across areas, not an adjusted or causal effect.
         gdf = selected()
         sub = gdf[[input.env_var(), input.lihtc_var()]].dropna()
         if len(sub) < 3:
             return "n/a"
-        rho, p = stats.spearmanr(sub.iloc[:, 0], sub.iloc[:, 1])
-        star = "*" if p < 0.05 else ""
-        return f"{rho:+.2f}{star}"
+        rho, _ = stats.spearmanr(sub.iloc[:, 0], sub.iloc[:, 1])
+        return f"{rho:+.2f}"
 
     @render.ui
     def exclusion_note():
@@ -463,10 +477,13 @@ def server(input, output, session):
         return ui.div(*parts)
 
     def _gap_phrase() -> str:
+        # Co-location, not deficit: the cell marks where the two variables happen
+        # to overlap. Without a market-rate comparison group the data cannot say
+        # LIHTC is disadvantaged, only where it coincides with the environment.
         worse = ENV_VARS[input.env_var()]["worse"]
         env = ENV_LABELS[input.env_var()].lower()
         direction = "highest" if worse == "high" else "lowest"
-        return f"{direction} {env} carrying the most affordable housing"
+        return f"the {direction} {env} coincides with the most LIHTC units"
 
     # ---- legend (3x3 swatch annotated with unit counts) ----
     @render.ui
@@ -474,7 +491,7 @@ def server(input, output, session):
         return ui.div(
             _grid_html(cell_size="52px", font="0.8rem", show_axis_labels=True),
             ui.p(
-                f"Red outline = the gap cell: {_gap_phrase()}.",
+                f"Red outline: where {_gap_phrase()}.",
                 class_="text-muted small mt-1 mb-0",
             ),
         )
@@ -488,8 +505,8 @@ def server(input, output, session):
             ui.h5("Counts by bivariate class"),
             _grid_html(cell_size="110px", font="1.3rem", show_axis_labels=True),
             ui.p(
-                f"{total:,} {unit_label_pl()} classified. The red-outlined cell is the "
-                f"gap: {unit_label_pl()} with the {_gap_phrase()}.",
+                f"{total:,} {unit_label_pl()} classified. The red-outlined cell marks "
+                f"where {_gap_phrase()}.",
                 class_="text-muted small mt-2",
             ),
             class_="p-2",
@@ -595,8 +612,9 @@ def server(input, output, session):
     @render.ui
     def gap_caption():
         return ui.p(
-            f"{unit_label_pl().capitalize()} in the gap corner of the grid - "
-            f"the {_gap_phrase()}.",
+            f"{unit_label_pl().capitalize()} in the corner cell of the grid, "
+            f"where {_gap_phrase()}. Co-location, not a measured disadvantage: "
+            "there is no market-rate comparison here.",
             class_="text-muted small",
         )
 

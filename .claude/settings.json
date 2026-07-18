@@ -8,7 +8,10 @@
       "Bash([ -f \"$CACHE\" ])",
       "Bash(exit 0)",
       "Bash(grep -vE \"^\\\\s*$\")",
-      "Bash(awk '{print \"canopy_bg_24:\", $5}')"
+      "Bash(awk '{print \"canopy_bg_24:\", $5}')",
+      "Bash(curl -s --max-time 15 https://api.github.com/repos/__TRACKED_VAR__/actions/runs?per_page=1)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s --max-time 15 https://api.github.com/repos/alibishokputov/green-gap-affordable-housing/actions/runs/29632319708/jobs)"
     ]
   }
 }
