@@ -4,6 +4,7 @@ project:
   # Only these locations are scanned for .qmd / .ipynb to render.
   render:
     - index.qmd
+    - data-methods.qmd
     - notebooks/*.ipynb
 
 # Cache executed notebook outputs so unchanged notebooks aren't re-run every build.
@@ -21,10 +22,12 @@ website:
     left:
       - href: index.qmd
         text: Home
+      - href: data-methods.qmd
+        text: Data & methods
       - text: Notebooks
         menu:
           - href: notebooks/1.0-example-green-gap-demo.ipynb
-            text: "1.0 — Green gap demo (plotnine + bivariate map)"
+            text: "1.0 Green gap demo (plotnine + bivariate map)"
     right:
       - icon: github
         href: "https://github.com/alibishokputov/green-gap-affordable-housing"

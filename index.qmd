@@ -1,6 +1,6 @@
 ---
 title: "Green Gap Affordable Housing"
-subtitle: "Spatial analysis of the green gap in affordable housing — DC & Maryland"
+subtitle: "Spatial analysis of the green gap in affordable housing: DC and Maryland"
 ---
 
 ## About this project
@@ -11,26 +11,31 @@ relates to affordable-housing locations (LIHTC and NHPD) across Washington, DC a
 
 The analysis combines:
 
-- **Parcels** — February 2026 parcel geometries
-- **Land cover / land use** — DC & MD raster editions (2017–2022 / 2018–2022)
-- **Affordable housing** — LIHTC and NHPD (National Housing Preservation Database)
+- **Parcels**: February 2026 parcel geometries
+- **Land cover / land use**: DC and MD raster editions (2017–2022 / 2018–2022)
+- **Affordable housing**: LIHTC and NHPD (National Housing Preservation Database)
 
 ## Interactive dashboard
 
-**[→ Green Gap dashboard](dashboard/)** — an interactive bivariate map of **tree canopy % ×
-LIHTC affordable units** across 1,666 census tracts in Maryland and Washington, DC.
+**[→ Green Gap dashboard](dashboard/)** is an interactive bivariate map crossing a summer
+environmental measure against LIHTC affordable units, for Maryland and Washington, DC.
 
-Canopy comes from the 1 m Chesapeake Bay land cover (all four tree-canopy classes, as a share
-of classified land area); affordable housing comes from HUD's national LIHTC database. Filter
-by jurisdiction, switch the canopy/LIHTC measures and classification scheme, and read off the
-**green-gap tracts** — the least-green places carrying the most affordable housing.
+Choose the unit of analysis (census block group or tract) and the environmental measure:
+summer surface temperature (Landsat), tree canopy percent (Chesapeake land cover), NDVI, or
+NDBI. Filter by jurisdiction, switch the LIHTC measure and classification scheme, and read off
+the corner cell, where the most affordable housing coincides with the worst environmental value.
+
+The map is descriptive. It shows where affordable housing and these conditions co-locate across
+areal units. It does not compare LIHTC to market-rate housing, so it is not evidence of a
+disparity or a causal effect. See **[Data & methods](data-methods.qmd)** for how every variable
+was built and what it can and cannot support.
 
 The dashboard runs entirely in your browser (WebAssembly), so there is no server and nothing to
 install.
 
 ## Notebooks
 
-- [1.0 — Green gap demo](notebooks/1.0-example-green-gap-demo.ipynb):
+- [1.0 Green gap demo](notebooks/1.0-example-green-gap-demo.ipynb):
   a worked example showing a `plotnine` chart and an interactive **bivariate choropleth** map.
 
 ## Reproducing the analysis
@@ -50,6 +55,6 @@ uv run quarto preview
 
 Raw data lives under `data/raw/` (study inputs) and `data/external/` (third-party rasters), and
 is **not** committed to the repository (see `.gitignore`). The one exception is
-`app/tracts.geojson`, the small derived table the dashboard reads — CI cannot rebuild it,
-since that needs the 2.4 GB land-cover rasters. See `references/` for provenance and data
+`app/units.geojson`, the small derived table the dashboard reads, because CI cannot rebuild it:
+that needs the 2.4 GB land-cover rasters. See `references/` for provenance and data
 dictionaries.

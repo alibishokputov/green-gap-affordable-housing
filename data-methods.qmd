@@ -1,0 +1,122 @@
+---
+title: "Data and methods"
+subtitle: "Green infrastructure and affordable housing data behind the dashboard"
+toc: true
+toc-depth: 2
+---
+
+This page summarizes how each dataset was processed and what each dashboard
+variable means. The visual overview below is a quick reference; the full
+documentation follows it and is maintained as `references/data_and_methods.md`
+in the repository.
+
+Everything here is cross-sectional and descriptive. The measures show where
+affordable housing and environmental conditions co-locate across census units.
+They do not, on their own, establish a disparity between housing types or a
+causal effect, because the data currently contain no comparison housing group.
+
+## Data streams at a glance
+
+| Stream | Source | Native resolution | Vintage | Dashboard variables |
+|---|---|---|---|---|
+| Tree canopy and land cover | Chesapeake Bay LULC, 2022 Edition | 1 m | ~2017 (DC), ~2018 (MD) | `canopy_pct`, `natural_canopy_pct` |
+| Surface temperature and spectral indices | Landsat 8 and 9, Collection 2 Level-2 | 30 m (LST ~100 m effective) | Summer 2021 to 2023 | `mean_lst`, `mean_ndvi`, `mean_ndbi` |
+| LIHTC affordable housing | HUD LIHTC database (LIHTCPUB) | point | Current inventory | `lihtc_units_low_income`, `lihtc_units_total`, `lihtc_projects` |
+
+## Units of analysis
+
+All variables are aggregated to U.S. Census areal units (2022 TIGER/Line). Two
+geographies run in parallel so results can be compared across scale.
+
+| Geography | Units (MD + DC) | Units with at least one LIHTC project | Role |
+|---|---|---|---|
+| Census block group | 4,650 | 741 | Default; finest unit carrying ACS data |
+| Census tract | 1,681 | 545 | Coarser scale for sensitivity checks |
+
+## Processing pipelines
+
+How the three raw sources become the unit-level table the dashboard reads.
+
+```{mermaid}
+flowchart LR
+  C["Chesapeake 1 m<br/>land cover"] --> Z["Zonal aggregation<br/>to census units"]
+  L["Landsat 8 and 9<br/>summer composite"] --> Z
+  H["HUD LIHTC<br/>inventory"] --> J["Spatial join<br/>to census units"]
+  Z --> T["Unit-level<br/>analysis table"]
+  J --> T
+  T --> D["Dashboard<br/>bivariate map"]
+```
+
+### Tree canopy
+
+Canopy combines the four canopy classes and is divided by classified land, so
+open water and unclassified area (including military installations masked to
+nodata) do not distort the share.
+
+```{mermaid}
+flowchart TD
+  A["Chesapeake 1 m<br/>12-class land cover"] --> B["exactextract<br/>area-weighted class fractions"]
+  B --> C["Canopy = classes<br/>3, 10, 11, 12"]
+  B --> D["Land = classified area<br/>minus water"]
+  C --> E["canopy_pct =<br/>canopy / land x 100"]
+  D --> E
+  E --> F{"Classified land<br/>vs Census land"}
+  F -->|gap small| G["canopy_reliable = true"]
+  F -->|gap large| H["canopy set to missing<br/>open water, military nodata"]
+```
+
+### Surface temperature and indices
+
+Indices are computed for each scene, then reduced to a per-pixel median across
+three summers. This order matters: the median is taken over the indices, not over
+a composite of raw bands.
+
+```{mermaid}
+flowchart TD
+  A["Landsat 8 and 9<br/>Collection 2 Level-2"] --> B["Filter: summer 2021 to 2023<br/>scene cloud below 60 percent"]
+  B --> C["Mask cloud, shadow,<br/>cirrus, saturated pixels"]
+  C --> D["Apply scale factors<br/>reflectance and temperature"]
+  D --> E["Per scene: LST, NDVI,<br/>NDBI, NDWI, albedo"]
+  E --> F["Median across<br/>3 summers, 30 m"]
+  F --> G["Zonal mean per unit<br/>mean_lst, mean_ndvi, ..."]
+```
+
+### LIHTC affordable housing
+
+```{mermaid}
+flowchart TD
+  A["HUD national LIHTC<br/>LIHTCPUB"] --> B["Restrict to MD and DC<br/>1,216 projects"]
+  B --> C["Geocode; drop 77 without<br/>coordinates, 3 outside layer"]
+  C --> D["Spatial join<br/>project point in census unit"]
+  D --> E["Aggregate per unit<br/>low-income units, total units, projects"]
+```
+
+## Reading the bivariate grid
+
+The dashboard sorts units into three classes on each axis and crosses them into a
+3 by 3 grid. The corner cell marks co-location: the units with the most LIHTC and
+the worst environmental value. Its position moves with the variable, since a low
+value is worse for canopy but a high value is worse for temperature.
+
+```{mermaid}
+flowchart TD
+  subgraph grid["3 x 3 bivariate classes"]
+    direction TB
+    R2["environment: high"]
+    R1["environment: mid"]
+    R0["environment: low"]
+  end
+  note["Corner cell = most LIHTC units<br/>+ worst environment.<br/>Low canopy, or high temperature."]
+  R0 -.-> note
+```
+
+For canopy the worst class is low, for surface temperature it is high, so the
+highlighted corner flips accordingly. The correlation reported in the dashboard is
+an unadjusted rank correlation across units, shown without a significance marker
+because at these sample sizes significance is uninformative.
+
+---
+
+*The complete documentation follows.*
+
+{{< include references/data_and_methods.md >}}
