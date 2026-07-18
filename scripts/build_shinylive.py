@@ -39,14 +39,22 @@ VENDORED = [
     PROJ_ROOT / "greengap" / "bivariate.py",
     PROJ_ROOT / "greengap" / "classify.py",
 ]
-ANALYSIS = PROJ_ROOT / "data" / "processed" / "tract_canopy_lihtc.parquet"
-
-# The dashboard's data is committed, unlike everything else under data/ (which is
-# git-ignored). CI cannot rebuild it: that needs the 2.4 GB Chesapeake rasters and
-# a ~20-minute extraction. So this small derived file is the tracked hand-off
-# between the local pipeline and the published site. Regenerate it with
-# --refresh-data after rebuilding the analysis table, and commit the result.
-GEOJSON_SRC = PROJ_ROOT / "app" / "tracts.geojson"
+# The dashboard ships BOTH geographies (block group + tract) and toggles between
+# them in-app. Each has an analysis parquet (local) and a committed GeoJSON (the
+# hand-off to the published site). These GeoJSONs are committed on purpose: CI
+# cannot rebuild them - that needs the 2.4 GB rasters and a ~25 min extraction.
+# app.py reads these exact filenames (GEOG_FILES). Regenerate with --refresh-data
+# and commit the result.
+GEOGS = {
+    "bg": {
+        "analysis": PROJ_ROOT / "data" / "processed" / "bg_analysis.parquet",
+        "geojson": PROJ_ROOT / "app" / "units_bg.geojson",
+    },
+    "tract": {
+        "analysis": PROJ_ROOT / "data" / "processed" / "tract_analysis.parquet",
+        "geojson": PROJ_ROOT / "app" / "units_tract.geojson",
+    },
+}
 
 # Every module the app imports, plus their transitive deps: shinylive installs
 # exactly this list and resolves nothing itself.
@@ -81,29 +89,37 @@ KEEP_COLS = [
     "canopy_pct",
     "natural_canopy_pct",
     "canopy_pct_total",
+    "mean_lst",
+    "mean_ndvi",
+    "mean_ndbi",
     "lihtc_units_low_income",
     "lihtc_units_total",
     "lihtc_projects",
     "geometry",
 ]
+ROUND_COLS = ["canopy_pct", "natural_canopy_pct", "canopy_pct_total",
+              "mean_lst", "mean_ndvi", "mean_ndbi"]
 
 SIMPLIFY_TOLERANCE = 0.0003  # ~30 m; display only
 
 
-def build_geojson(dest: Path) -> tuple[int, int]:
+def build_geojson(analysis: Path, dest: Path) -> tuple[int, int]:
     """Write the slimmed, simplified GeoJSON the browser app reads."""
-    if not ANALYSIS.exists():
+    if not analysis.exists():
         sys.exit(
-            f"Analysis table missing: {ANALYSIS}\n"
-            "Build it first:  uv run python -m greengap.dataset build"
+            f"Analysis table missing: {analysis}\n"
+            "Build it first:  uv run python -m greengap.dataset build --geog "
+            f"{'bg' if 'bg' in analysis.name else 'tract'}"
         )
-    gdf = gpd.read_parquet(ANALYSIS)
+    gdf = gpd.read_parquet(analysis)
 
+    # Keep every unit: canopy-unreliable ones (open water / military nodata) still
+    # carry valid LST/NDVI, and the app excludes NaN per-variable. build sets their
+    # canopy_* to NaN already, which GeoJSON serialises as null.
     n_unmeasured = int((~gdf["canopy_reliable"]).sum())
-    gdf = gdf[gdf["canopy_reliable"]].copy()
 
     gdf = gdf[KEEP_COLS].copy()
-    for col in ("canopy_pct", "natural_canopy_pct", "canopy_pct_total"):
+    for col in ROUND_COLS:
         gdf[col] = gdf[col].astype(float).round(2)
 
     gdf["geometry"] = gdf.geometry.simplify(SIMPLIFY_TOLERANCE, preserve_topology=True)
@@ -120,8 +136,8 @@ def build_geojson(dest: Path) -> tuple[int, int]:
         sys.exit(f"{still_bad} geometries remain invalid after make_valid(); aborting")
 
     payload = json.loads(gdf.to_json())
-    # Carry the excluded-tract count through so the app can report it honestly.
-    payload["unmeasured_tracts"] = n_unmeasured
+    # Carry the unmeasured-canopy count through so the app can report it honestly.
+    payload["unmeasured_canopy"] = n_unmeasured
     dest.write_text(json.dumps(payload, separators=(",", ":")))
     return len(gdf), n_unmeasured
 
@@ -179,19 +195,27 @@ def main() -> None:
     parser.add_argument(
         "--refresh-data",
         action="store_true",
-        help=f"Regenerate {GEOJSON_SRC.name} from the analysis table, then commit it.",
+        help="Regenerate each geography's GeoJSON from its analysis table, then commit.",
     )
     args = parser.parse_args()
 
-    if args.refresh_data or not GEOJSON_SRC.exists():
-        n, n_unmeasured = build_geojson(GEOJSON_SRC)
-        size_mb = GEOJSON_SRC.stat().st_size / 1e6
-        print(
-            f"regenerated {GEOJSON_SRC.relative_to(PROJ_ROOT)}: {n} tracts "
-            f"({n_unmeasured} unmeasurable excluded), {size_mb:.1f} MB - commit this file"
-        )
-    else:
-        print(f"using committed {GEOJSON_SRC.relative_to(PROJ_ROOT)} (--refresh-data to rebuild)")
+    # Regenerate each geography's GeoJSON when asked, or when it is missing but its
+    # analysis table exists. A geography with neither is simply skipped (the app
+    # loads whichever GeoJSONs are present).
+    for geog, files in GEOGS.items():
+        gj, an = files["geojson"], files["analysis"]
+        if args.refresh_data or (not gj.exists() and an.exists()):
+            n, n_unmeasured = build_geojson(an, gj)
+            print(
+                f"regenerated {gj.relative_to(PROJ_ROOT)}: {n} {geog} units "
+                f"({n_unmeasured} unmeasured canopy), {gj.stat().st_size / 1e6:.1f} MB"
+            )
+        elif gj.exists():
+            print(f"using committed {gj.relative_to(PROJ_ROOT)} (--refresh-data to rebuild)")
+
+    present = [g for g, f in GEOGS.items() if f["geojson"].exists()]
+    if not present:
+        sys.exit("No geography GeoJSONs present. Run with --refresh-data after building a table.")
 
     staging: Path = args.staging
     if staging.exists():
@@ -201,7 +225,8 @@ def main() -> None:
     shutil.copy2(APP_SRC, staging / "app.py")
     for src in VENDORED:
         shutil.copy2(src, staging / src.name)
-    shutil.copy2(GEOJSON_SRC, staging / "tracts.geojson")
+    for geog in present:
+        shutil.copy2(GEOGS[geog]["geojson"], staging / GEOGS[geog]["geojson"].name)
     (staging / "requirements.txt").write_text("\n".join(REQUIREMENTS) + "\n")
 
     # Guard the invariant the whole static build rests on: nothing the app

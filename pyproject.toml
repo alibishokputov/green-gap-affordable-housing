@@ -67,6 +67,7 @@ dependencies = [
     "shinywidgets>=0.8.1",
     "exactextract>=0.3.0",
     "python-calamine>=0.8.2",
+    "geedim>=2.0.0",
 ]
 
 [dependency-groups]

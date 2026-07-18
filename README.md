@@ -58,17 +58,22 @@ example crossing *green-space share* × *affordable-housing units*.
 
 ## Green-gap dashboard (Shiny)
 
-An interactive **tree canopy % × LIHTC affordable units** bivariate map at census-tract
-level for **Maryland + Washington, DC** (1,666 mapped tracts).
+An interactive bivariate map crossing a **summer-environment measure** (surface temperature,
+tree canopy %, NDVI, or NDBI) against **LIHTC affordable units**, at **census block-group**
+level for **Maryland + Washington, DC** (~4,650 block groups).
 
 **Published (no server, no install):** `https://<user>.github.io/green-gap-affordable-housing/dashboard/`
 
 Run it locally:
 
 ```bash
-uv run python -m greengap.dataset build   # one-time: builds the analysis table (~20 min)
+uv run python -m greengap.dataset build   # one-time: builds the analysis table (~25 min)
 uv run shiny run app/app.py               # then open http://127.0.0.1:8000
 ```
+
+The vertical axis is selectable; **surface temperature (LST)** is the default. The "gap" cell —
+the worst environment carrying the most affordable housing — flips corner with the variable's
+polarity (low canopy vs. *high* heat), computed from `ENV_VARS[...]["worse"]`, not hard-coded.
 
 ### How it's published
 
@@ -83,10 +88,10 @@ uv run python scripts/build_shinylive.py --refresh-data --out _site/dashboard
 python3 -m http.server --directory _site/dashboard 8000   # preview the static build
 ```
 
-`app/tracts.geojson` (1.9 MB) is **committed on purpose** — it is the hand-off between the local
-pipeline and the published site, because CI cannot rebuild it (that needs the 2.4 GB rasters and
-a ~20-minute extraction). Regenerate it with `--refresh-data` whenever the analysis table
-changes, and commit the result.
+`app/units.geojson` is **committed on purpose** — it is the hand-off between the local pipeline
+and the published site, because CI cannot rebuild it (that needs the 2.4 GB rasters and a
+~25-minute extraction). Regenerate it with `--refresh-data` whenever the analysis table changes,
+and commit the result.
 
 > ### Pyodide constraints — read before editing `app/app.py`
 >
@@ -111,20 +116,27 @@ changes, and commit the result.
 > First paint is currently ~11 s; re-measure it if you add a dependency.
 
 The dashboard has a bivariate map, a joint-distribution heatmap, a scatter with an OLS fit,
-and a filtered table of **green-gap tracts** (high LIHTC / low canopy — the argument of the
-study). Controls: county filter, canopy definition, LIHTC measure, classification scheme,
-palette, and whether breaks are computed on the visible selection or the whole state.
+and a filtered table of **gap areas** (worst environment × most affordable housing). Controls:
+county filter, environmental measure, LIHTC measure, classification scheme, palette, and whether
+breaks are computed on the visible selection or the whole study area.
 
 ### The data pipeline
 
-`greengap/dataset.py` builds the analysis table in cached steps:
+`greengap/dataset.py` builds the analysis table in cached steps. The **unit of analysis** is
+parametrized: `--geog bg` (block group, default) or `--geog tract` (coarser robustness check);
+all caches are geography-scoped so both coexist.
 
-| Step | What | Output |
-|------|------|--------|
-| `tracts` | TIGER census tracts + county names (MD + DC) | `data/interim/tracts.parquet` |
-| `lihtc` | LIHTC points → summed to tracts | `data/interim/lihtc_by_tract.parquet` |
-| `canopy` | 1 m Chesapeake land cover → per-tract class fractions (`exactextract`) | `data/interim/canopy_by_tract_{24,11}.parquet` |
-| `build` | join of the above | `data/processed/tract_canopy_lihtc.parquet` |
+| Step | What | Output (bg) |
+|------|------|-------------|
+| `boundaries` | TIGER census units + county names (MD + DC) | `data/interim/boundaries_bg.parquet` |
+| `lihtc` | LIHTC points → summed to units | `data/interim/lihtc_by_bg.parquet` |
+| `canopy` | 1 m Chesapeake land cover → per-unit class fractions (`exactextract`) | `data/interim/canopy_bg_{24,11}.parquet` |
+| `landsat` | Summer LST/NDVI/NDBI/albedo per unit from the GEE stack | `data/interim/landsat_by_bg.parquet` |
+| `build` | join of the above | `data/processed/bg_analysis.parquet` |
+
+The `landsat` step needs the Earth Engine export (`greengap/gee.py` → `data/external/gee/`); see
+[gee/README.md](gee/README.md). LST is Landsat thermal, natively ~100 m — a block-group mean is
+stable, but do not read it as 30 m detail.
 
 Run any step alone (`uv run python -m greengap.dataset canopy --state 11`). The MD raster is
 2.4 GB at 1 m, so `canopy` is the slow step (~20 min for MD; DC takes 8 s) — it caches
@@ -145,18 +157,21 @@ inside the zip.
   (3 = Tree Canopy; 10/11/12 = canopy over structures / other impervious / roads). The default
   `canopy_pct` counts all four (standard urban-tree-canopy practice) and divides by
   **classified land area** (water *and* nodata excluded). Counting only class 3 undercounts
-  canopy by up to ~3× in dense urban tracts — exactly where LIHTC concentrates. Both
-  definitions are in the app so you can test sensitivity.
-- **15 tracts have no measurable canopy** and are excluded: open-water tracts (Census `99xxxx`
-  series) and military land, which the Chesapeake raster leaves as nodata (Aberdeen Proving
-  Ground, Joint Base Andrews). They are flagged by `canopy_reliable`. Validation: area-weighted
-  canopy comes to 34.9% for DC (published UTC ≈ 38%, and our land cover is the 2017 edition)
-  and 49.8% for MD.
+  canopy by up to ~3× in dense urban areas — exactly where LIHTC concentrates. Both definitions
+  are in the app so you can test sensitivity.
+- **Some units have no measurable canopy** — open-water units (Census `99xxxx` series) and
+  military land, which the Chesapeake raster leaves as nodata (Aberdeen Proving Ground, Joint
+  Base Andrews). Their `canopy_*` is set to NaN and flagged by `canopy_reliable`; the app
+  excludes them from *canopy* views only (they keep valid LST/NDVI). Validation: area-weighted
+  canopy ≈ 34.9% for DC (published UTC ≈ 38%; our land cover is the 2017 edition) and 49.8% MD.
+- **LST reveals the urban heat island directly.** Summer surface temperature spans ~22–48 °C
+  across block groups; dense urban cores run 8–9 °C hotter than vegetated fringes. That gradient
+  is the outcome the study tests — is affordable housing in the hotter block groups, after
+  controlling for canopy and built form?
 
-> **Classification gotcha:** ~70% of tracts have zero LIHTC. Quantile breaks therefore put both
-> cut points at 0, collapsing the LIHTC axis to two classes and **emptying the high-LIHTC
-> corner the study is about** (statewide: 22 green-gap tracts under natural breaks vs **0**
-> under quantiles). Natural breaks is the default; the app warns if quantiles degenerate.
+> **Classification gotcha:** most units have zero LIHTC. Quantile breaks therefore put both cut
+> points at 0, collapsing the LIHTC axis to two classes and **emptying the high-LIHTC corner the
+> study is about**. Natural breaks is the default; the app warns if quantiles degenerate.
 
 ## Project organization
 
@@ -182,7 +197,7 @@ inside the zip.
 │
 ├── app                <- Shiny dashboard (bivariate canopy x LIHTC map)
 │   ├── app.py           `uv run shiny run app/app.py`; also compiled to WASM
-│   └── tracts.geojson   Committed on purpose: the dashboard's data (CI can't rebuild it)
+│   └── units.geojson    Committed on purpose: the dashboard's data (CI can't rebuild it)
 ├── scripts
 │   └── build_shinylive.py  <- Compiles the dashboard to static WASM for GitHub Pages
 ├── gee                <- Google Earth Engine scripts (Landsat summer environmental rasters)

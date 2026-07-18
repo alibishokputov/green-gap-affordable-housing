@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(brew list *)",
+      "Bash(brew upgrade *)",
+      "Bash(grep -ivE \"^\\\\s*$\")",
+      "Bash([ -f \"$CACHE\" ])",
+      "Bash(exit 0)",
+      "Bash(grep -vE \"^\\\\s*$\")",
+      "Bash(awk '{print \"canopy_bg_24:\", $5}')"
+    ]
+  }
+}

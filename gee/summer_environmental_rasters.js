@@ -120,9 +120,14 @@ function scaleAndRename(image) {
   // that scaling can introduce over dark/wet surfaces.
   sr = sr.clamp(0, 1);
 
-  return image.addBands(sr, null, true)
-              .addBands(st, null, true)
-              .copyProperties(image, image.propertyNames());
+  // ee.Image(...) cast is load-bearing: copyProperties returns an Element, but
+  // a function mapped over an ImageCollection must return an Image, or the map
+  // fails / the next select() breaks.
+  return ee.Image(
+    image.addBands(sr, null, true)
+         .addBands(st, null, true)
+         .copyProperties(image, image.propertyNames())
+  );
 }
 
 

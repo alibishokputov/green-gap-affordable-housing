@@ -135,6 +135,8 @@ def study_area(ee):
 # --------------------------------------------------------------------------- #
 def _scale_and_rename(image):
     """Apply C2 L2 scale/offset; rename SR bands to common names; ST -> deg C."""
+    import ee
+
     sr = (
         image.select(["SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7"])
         .multiply(_SR_MULT)
@@ -149,7 +151,11 @@ def _scale_and_rename(image):
         .subtract(273.15)  # -> Celsius
         .rename("LST")
     )
-    return (
+    # copyProperties returns an ee.Element, but a function mapped over an
+    # ImageCollection must return an ee.Image - without this cast the map fails
+    # ("mapped function's return value must be an Image") or breaks on the next
+    # .select(). Same reason the JS version wraps its result.
+    return ee.Image(
         image.addBands(sr, None, True)
         .addBands(st, None, True)
         .copyProperties(image, image.propertyNames())
@@ -363,11 +369,14 @@ def download_local(
         False, help="Download only the multi-band stack (skip per-layer files)."
     ),
 ):
-    """Download GeoTIFFs straight into the repo via geemap (no Drive step).
+    """Download GeoTIFFs straight into the repo (no Google Drive, no Drive scope).
 
-    Note: Earth Engine caps direct downloads (~50 MB / a few 1e8 pixels). MD+DC
-    at 30 m can exceed that for the full stack; if you hit a size error, use
-    ``export-drive`` instead, or tile the region.
+    Uses ``geemap.download_ee_image`` (geedim backend), which **tiles and
+    stitches** automatically. This matters: MD+DC at 30 m is ~88 M pixels/band,
+    and the 5-band stack is ~1.8 GB - roughly 37x over Earth Engine's ~48 MB
+    direct-download cap, so the simpler ``ee_export_image`` / ``getDownloadURL``
+    path would fail outright. geedim splits the request into tiles under the cap
+    and reassembles a single GeoTIFF.
     """
     import geemap
 
@@ -376,18 +385,22 @@ def download_local(
     p = build_products(ee, cfg)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Downloading to {out_dir}")
+    logger.info(f"Downloading to {out_dir} (tiled via geedim; large area, be patient)")
 
     def grab(image, name):
         dest = out_dir / f"{name}.tif"
+        if dest.exists():
+            logger.info(f"  skip {dest.name} (exists)")
+            return
         logger.info(f"  -> {dest.name}")
-        geemap.ee_export_image(
+        # crs_transform is not passed, so geedim derives the grid from crs+scale;
+        # every band uses the identical crs/scale/region so the files stay aligned.
+        geemap.download_ee_image(
             image,
             filename=str(dest),
-            scale=cfg.scale,
             region=p.region,
             crs=cfg.crs,
-            file_per_band=False,
+            scale=cfg.scale,
         )
 
     grab(p.composite.toFloat(), f"{cfg.tag}_stack")

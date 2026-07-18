@@ -1,12 +1,15 @@
-"""Shiny dashboard: bivariate map of tree canopy % x LIHTC affordable units.
+"""Shiny dashboard: bivariate map of a summer-environment measure x LIHTC units.
 
-Crosses two variables on a 3x3 color grid at census-tract level for Maryland + DC:
+Crosses two variables on a 3x3 color grid at block-group level for Maryland + DC:
 
-    vertical axis (A)   tree canopy % of land area  (Chesapeake 1 m land cover)
-    horizontal axis (B) LIHTC units                 (HUD LIHTC database)
+    vertical axis (A)   an environmental measure - summer surface temperature
+                        (Landsat), tree canopy % (Chesapeake), NDVI or NDBI
+    horizontal axis (B) LIHTC units               (HUD LIHTC database)
 
-The interesting cell is **high LIHTC / low canopy** - affordable housing in the
-least-green tracts, i.e. the "green gap".
+The interesting cell is the "gap": the most affordable housing in the worst
+environment. Which corner that is flips with the variable's polarity - low
+canopy but high surface temperature - so it is computed from ``ENV_VARS[...]
+["worse"]`` rather than hard-coded (see ``worst_env_row``).
 
 Run locally::
 
@@ -55,13 +58,35 @@ except ModuleNotFoundError:  # shinylive: build script vendors these alongside
     from classify import bins as class_bins
 
 HERE = Path(__file__).resolve().parent
-BUNDLED_GEOJSON = HERE / "tracts.geojson"
-LOCAL_PARQUET = HERE.parent / "data" / "processed" / "tract_canopy_lihtc.parquet"
-
-CANOPY_VARS = {
-    "canopy_pct": "Tree canopy % (all, incl. over impervious)",
-    "natural_canopy_pct": "Tree canopy % (natural only)",
+# Two geographies, switchable in the app: block group (fine) and tract (coarse
+# robustness check). Each has a bundled GeoJSON (published build) and a local
+# parquet (dev fallback). The tract file may be absent in older builds.
+GEOG_FILES = {
+    "bg": {
+        "label": "block group",
+        "geojson": HERE / "units_bg.geojson",
+        "parquet": HERE.parent / "data" / "processed" / "bg_analysis.parquet",
+    },
+    "tract": {
+        "label": "census tract",
+        "geojson": HERE / "units_tract.geojson",
+        "parquet": HERE.parent / "data" / "processed" / "tract_analysis.parquet",
+    },
 }
+
+# Environmental variables for the vertical (A) axis. `worse` records which
+# direction is disadvantageous for residents, so the "green gap" corner (worst
+# environment x most affordable housing) lands in the right cell regardless of
+# which variable is shown: canopy's gap is LOW canopy, but LST's gap is HIGH heat.
+ENV_VARS = {
+    "canopy_pct": {"label": "Tree canopy % (all)", "worse": "low"},
+    "natural_canopy_pct": {"label": "Tree canopy % (natural only)", "worse": "low"},
+    "mean_lst": {"label": "Summer surface temp (°C)", "worse": "high"},
+    "mean_ndvi": {"label": "NDVI (vegetation)", "worse": "low"},
+    "mean_ndbi": {"label": "NDBI (built-up)", "worse": "high"},
+}
+ENV_LABELS = {k: v["label"] for k, v in ENV_VARS.items()}
+
 LIHTC_VARS = {
     "lihtc_units_low_income": "LIHTC low-income units",
     "lihtc_units_total": "LIHTC total units",
@@ -78,40 +103,46 @@ SCHEMES = {
 }
 
 
-def load_data() -> tuple[gpd.GeoDataFrame, int]:
-    """Load the analysis table.
+def _load_one(geog: str) -> tuple[gpd.GeoDataFrame, int] | None:
+    """Load one geography's analysis table, or None if its files are absent.
 
     Prefers the GeoJSON the build script bundles (the only option under Pyodide,
     which has no pyarrow); falls back to the parquet for local development.
+
+    Units whose canopy could not be measured (open water, military nodata) are
+    KEPT - they still carry valid LST/NDVI - and each view excludes NaN in *its
+    own* selected variable (see `classed`). Dropping them globally, as the old
+    canopy-only dashboard did, would discard real temperature data.
     """
-    if BUNDLED_GEOJSON.exists():
-        raw = json.loads(BUNDLED_GEOJSON.read_text())
+    files = GEOG_FILES[geog]
+    if files["geojson"].exists():
+        raw = json.loads(files["geojson"].read_text())
         gdf = gpd.GeoDataFrame.from_features(raw["features"], crs="EPSG:4326")
-        # The build script already dropped unmeasurable tracts and simplified.
-        return gdf, int(raw.get("unmeasured_tracts", 0))
-
-    if not LOCAL_PARQUET.exists():
-        raise FileNotFoundError(
-            f"No data found. Expected the bundled {BUNDLED_GEOJSON.name} or "
-            f"{LOCAL_PARQUET}.\nBuild it first:  uv run python -m greengap.dataset build"
-        )
-    gdf = gpd.read_parquet(LOCAL_PARQUET)
-
-    # Drop tracts whose canopy could not be measured (open-water tracts, and the
-    # military bases the Chesapeake land cover leaves as nodata). Their canopy is
-    # NaN, and NaN would otherwise be binned into the *low canopy* class - i.e.
-    # open Bay water would render as if it were a treeless neighbourhood.
-    n_dropped = int((~gdf["canopy_reliable"]).sum())
-    gdf = gdf[gdf["canopy_reliable"]].copy()
-
-    # Simplify purely for browser rendering speed; stats use the real geometry.
-    gdf["geometry"] = gdf.geometry.simplify(0.0003, preserve_topology=True)
-    return gdf, n_dropped
+        return gdf, int(raw.get("unmeasured_canopy", 0))
+    if files["parquet"].exists():
+        gdf = gpd.read_parquet(files["parquet"])
+        n = int((~gdf["canopy_reliable"]).sum())
+        gdf["geometry"] = gdf.geometry.simplify(0.0003, preserve_topology=True)  # render speed
+        return gdf, n
+    return None
 
 
-GDF, N_UNMEASURED = load_data()
-COUNTIES = sorted(GDF["county"].dropna().unique().tolist())
+DATA = {g: d for g in GEOG_FILES if (d := _load_one(g)) is not None}
+if not DATA:
+    raise FileNotFoundError(
+        "No analysis data found for any geography. Build it first:\n"
+        "  uv run python -m greengap.dataset build --geog bg"
+    )
+GEOG_CHOICES = {g: GEOG_FILES[g]["label"].capitalize() for g in DATA}
+DEFAULT_GEOG = "bg" if "bg" in DATA else next(iter(DATA))
+# County list spans whichever geographies loaded (block group has the superset).
+COUNTIES = sorted({c for gdf, _ in DATA.values() for c in gdf["county"].dropna().unique()})
 DEFAULT_COUNTIES = [c for c in ("Baltimore city", "District of Columbia") if c in COUNTIES]
+
+
+def worst_env_row(env_var: str) -> int:
+    """Grid row (0=low, 2=high) that is disadvantageous for the given variable."""
+    return 2 if ENV_VARS[env_var]["worse"] == "high" else 0
 
 
 # --------------------------------------------------------------------------- #
@@ -119,6 +150,9 @@ DEFAULT_COUNTIES = [c for c in ("Baltimore city", "District of Columbia") if c i
 # --------------------------------------------------------------------------- #
 app_ui = ui.page_sidebar(
     ui.sidebar(
+        ui.input_select(
+            "geog", "Unit of analysis", choices=GEOG_CHOICES, selected=DEFAULT_GEOG
+        ),
         ui.input_selectize(
             "counties",
             "Counties / jurisdictions",
@@ -128,7 +162,9 @@ app_ui = ui.page_sidebar(
         ),
         ui.input_action_button("all_counties", "Select all counties", class_="btn-sm"),
         ui.hr(),
-        ui.input_select("canopy_var", "Canopy measure", choices=CANOPY_VARS),
+        ui.input_select(
+            "env_var", "Environmental measure", choices=ENV_LABELS, selected="mean_lst"
+        ),
         ui.input_select("lihtc_var", "LIHTC measure", choices=LIHTC_VARS),
         ui.hr(),
         ui.input_select("scheme", "Classification", choices=SCHEMES),
@@ -138,24 +174,20 @@ app_ui = ui.page_sidebar(
         ui.input_radio_buttons(
             "classify_on",
             "Classify breaks on",
-            choices={"selection": "Visible selection", "state": "Entire state"},
+            choices={"selection": "Visible selection", "state": "Entire study area"},
             selected="selection",
         ),
-        ui.input_switch("lihtc_only", "Only tracts with LIHTC units", value=False),
+        ui.input_switch("lihtc_only", "Only areas with LIHTC units", value=False),
         ui.hr(),
         ui.output_ui("legend"),
-        ui.p(
-            f"{N_UNMEASURED} tract(s) excluded: canopy not measurable "
-            "(open-water tracts; military land is nodata in the Chesapeake raster).",
-            class_="text-muted small",
-        ),
+        ui.output_ui("exclusion_note"),
         width=330,
     ),
     ui.layout_columns(
-        ui.value_box("Tracts shown", ui.output_text("n_tracts")),
-        ui.value_box("Tracts with LIHTC", ui.output_text("n_lihtc")),
+        ui.value_box("Areas shown", ui.output_text("n_tracts")),
+        ui.value_box("Areas with LIHTC", ui.output_text("n_lihtc")),
         ui.value_box("LIHTC units", ui.output_text("n_units")),
-        ui.value_box("Canopy x LIHTC (Spearman)", ui.output_text("corr")),
+        ui.value_box(ui.output_text("corr_label"), ui.output_text("corr")),
         fill=False,
     ),
     ui.output_ui("note"),
@@ -164,16 +196,12 @@ app_ui = ui.page_sidebar(
         ui.nav_panel("Joint distribution", ui.output_ui("heatmap")),
         ui.nav_panel("Scatter", ui.output_ui("scatter")),
         ui.nav_panel(
-            "Green-gap tracts",
-            ui.p(
-                "Tracts in the high-LIHTC / low-canopy corner of the grid - "
-                "the most affordable housing in the least green places.",
-                class_="text-muted small",
-            ),
+            "Green-gap areas",
+            ui.output_ui("gap_caption"),
             ui.output_data_frame("gap_table"),
         ),
     ),
-    title="Green Gap - tree canopy x LIHTC affordable housing (Maryland + DC)",
+    title="Green Gap - environment x LIHTC affordable housing (MD + DC)",
     fillable=True,
 )
 
@@ -187,10 +215,21 @@ def server(input, output, session):
     def _select_all():
         ui.update_selectize("counties", selected=COUNTIES)
 
+    def unit_label() -> str:
+        return GEOG_FILES[input.geog()]["label"]
+
+    def unit_label_pl() -> str:
+        return unit_label() + "s"
+
+    @reactive.calc
+    def current():
+        """(GeoDataFrame, unmeasured-canopy count) for the selected geography."""
+        return DATA[input.geog()]
+
     @reactive.calc
     def base() -> gpd.GeoDataFrame:
         """Rows eligible for classification (before the visible-county filter)."""
-        gdf = GDF
+        gdf = current()[0]
         if input.lihtc_only():
             gdf = gdf[gdf[input.lihtc_var()] > 0]
         return gdf
@@ -216,12 +255,17 @@ def server(input, output, session):
         Note the LIHTC variables are zero-inflated (most tracts have no LIHTC at
         all), which makes quantile breaks degenerate - see ``class_note``.
         """
-        a, b = input.canopy_var(), input.lihtc_var()
-        vis = selected()
+        a, b = input.env_var(), input.lihtc_var()
+        # Exclude units with no value for the *selected* environmental variable
+        # (e.g. canopy is NaN over open water / military land). Excluding rather
+        # than binning them to class 0 keeps open water from rendering as a
+        # treeless "low-canopy" neighbourhood - and only affects the variable
+        # that's actually missing, so LST views keep every unit.
+        vis = selected().dropna(subset=[a])
         if vis.empty:
             return vis
 
-        source = base() if input.classify_on() == "state" else vis
+        source = base().dropna(subset=[a]) if input.classify_on() == "state" else vis
         out = vis.copy()
         colors = BIVARIATE_PALETTES[input.palette()]
 
@@ -253,11 +297,11 @@ def server(input, output, session):
             zeros = int((selected()[input.lihtc_var()] == 0).sum())
             pct = zeros / max(len(selected()), 1) * 100
             return (
-                f"Heads-up: {zeros:,} of {len(selected()):,} tracts ({pct:.0f}%) have zero "
-                f"{LIHTC_VARS[input.lihtc_var()]}, so the {input.scheme()} breaks collapse "
-                "the LIHTC axis to fewer than 3 distinct classes. Turn on "
-                "'Only tracts with LIHTC units' to classify within the tracts that "
-                "actually have affordable housing."
+                f"Heads-up: {zeros:,} of {len(selected()):,} {unit_label_pl()} ({pct:.0f}%) "
+                f"have zero {LIHTC_VARS[input.lihtc_var()]}, so the {input.scheme()} breaks "
+                f"collapse the LIHTC axis to fewer than 3 classes. Turn on "
+                f"'Only areas with LIHTC units' to classify within the "
+                f"{unit_label_pl()} that actually have affordable housing."
             )
         return ""
 
@@ -277,14 +321,33 @@ def server(input, output, session):
         return f"{int(gdf[input.lihtc_var()].sum()):,}"
 
     @render.text
+    def corr_label():
+        short = {"mean_lst": "Heat", "canopy_pct": "Canopy",
+                 "natural_canopy_pct": "Canopy", "mean_ndvi": "NDVI",
+                 "mean_ndbi": "Built-up"}.get(input.env_var(), "Env")
+        return f"{short} x LIHTC (Spearman)"
+
+    @render.text
     def corr():
         gdf = selected()
-        sub = gdf[[input.canopy_var(), input.lihtc_var()]].dropna()
+        sub = gdf[[input.env_var(), input.lihtc_var()]].dropna()
         if len(sub) < 3:
             return "n/a"
         rho, p = stats.spearmanr(sub.iloc[:, 0], sub.iloc[:, 1])
         star = "*" if p < 0.05 else ""
         return f"{rho:+.2f}{star}"
+
+    @render.ui
+    def exclusion_note():
+        # Only relevant to canopy views; LST/NDVI have no unmeasured units.
+        if input.env_var() not in ("canopy_pct", "natural_canopy_pct"):
+            return None
+        return ui.p(
+            f"{current()[1]} {unit_label()} canopy value(s) not measurable "
+            "(open water; military land is nodata in the Chesapeake raster) - "
+            "excluded from canopy views only.",
+            class_="text-muted small",
+        )
 
     @render.ui
     def note():
@@ -298,7 +361,9 @@ def server(input, output, session):
     def map():
         gdf = classed()
         if gdf.empty:
-            return ui.div("No tracts match the current filters.", class_="p-4 text-muted")
+            return ui.div(
+                f"No {unit_label_pl()} match the current filters.", class_="p-4 text-muted"
+            )
 
         # Centre from the bounding box, NOT gdf.geometry.union_all().centroid:
         # unioning 1600+ simplified polygons is expensive, and GEOS throws a
@@ -312,7 +377,7 @@ def server(input, output, session):
             tiles="CartoDB positron",
         )
 
-        a, b = input.canopy_var(), input.lihtc_var()
+        a, b = input.env_var(), input.lihtc_var()
         cols = ["GEOID", "county", "NAMELSAD", a, b, "bi_color"]
         show = gdf[cols + ["geometry"]].copy()
         show[a] = show[a].round(1)
@@ -328,7 +393,7 @@ def server(input, output, session):
             highlight_function=lambda f: {"weight": 2, "color": "#000000"},
             tooltip=folium.GeoJsonTooltip(
                 fields=["NAMELSAD", "county", a, b],
-                aliases=["Tract", "County", CANOPY_VARS[a], LIHTC_VARS[b]],
+                aliases=[unit_label().capitalize(), "County", ENV_LABELS[a], LIHTC_VARS[b]],
                 sticky=True,
             ),
         ).add_to(m)
@@ -343,7 +408,7 @@ def server(input, output, session):
         return ui.HTML(m.get_root()._repr_html_())
 
     def _cell_counts() -> np.ndarray:
-        """Tract count in each of the 9 bivariate classes (row = canopy)."""
+        """Unit count in each of the 9 bivariate classes (row = env, col = LIHTC)."""
         gdf = classed()
         grid = np.zeros((3, 3), dtype=int)
         if gdf.empty:
@@ -361,12 +426,13 @@ def server(input, output, session):
         """
         colors = BIVARIATE_PALETTES[input.palette()]
         grid = _cell_counts()
+        gap_row = worst_env_row(input.env_var())  # 0 for canopy, 2 for LST
 
         rows = []
-        for row in (2, 1, 0):  # top row = high canopy
+        for row in (2, 1, 0):  # display top-to-bottom = high env at top
             cells = []
             for col in range(3):
-                is_gap = row == 0 and col == 2  # low canopy + high LIHTC
+                is_gap = row == gap_row and col == 2  # worst environment + high LIHTC
                 cells.append(
                     ui.div(
                         str(grid[row, col]),
@@ -392,17 +458,23 @@ def server(input, output, session):
             )
             parts.insert(
                 0,
-                ui.p(f"↑ {CANOPY_VARS[input.canopy_var()]}", class_="text-muted small mb-1"),
+                ui.p(f"↑ {ENV_LABELS[input.env_var()]}", class_="text-muted small mb-1"),
             )
         return ui.div(*parts)
 
-    # ---- legend (3x3 swatch annotated with tract counts) ----
+    def _gap_phrase() -> str:
+        worse = ENV_VARS[input.env_var()]["worse"]
+        env = ENV_LABELS[input.env_var()].lower()
+        direction = "highest" if worse == "high" else "lowest"
+        return f"{direction} {env} carrying the most affordable housing"
+
+    # ---- legend (3x3 swatch annotated with unit counts) ----
     @render.ui
     def legend():
         return ui.div(
             _grid_html(cell_size="52px", font="0.8rem", show_axis_labels=True),
             ui.p(
-                "Red outline = the green gap: low canopy, high LIHTC.",
+                f"Red outline = the gap cell: {_gap_phrase()}.",
                 class_="text-muted small mt-1 mb-0",
             ),
         )
@@ -413,11 +485,11 @@ def server(input, output, session):
         grid = _cell_counts()
         total = int(grid.sum())
         return ui.div(
-            ui.h5("Tract counts by bivariate class"),
+            ui.h5("Counts by bivariate class"),
             _grid_html(cell_size="110px", font="1.3rem", show_axis_labels=True),
             ui.p(
-                f"{total:,} tracts classified. The red-outlined cell is the "
-                "green gap: the least-green tracts carrying the most affordable housing.",
+                f"{total:,} {unit_label_pl()} classified. The red-outlined cell is the "
+                f"gap: {unit_label_pl()} with the {_gap_phrase()}.",
                 class_="text-muted small mt-2",
             ),
             class_="p-2",
@@ -426,7 +498,7 @@ def server(input, output, session):
     # ---- scatter (inline SVG, deliberately not matplotlib) ----
     @render.ui
     def scatter():
-        """Canopy vs LIHTC scatter with an OLS fit, emitted as raw SVG.
+        """Environment vs LIHTC scatter with an OLS fit, emitted as raw SVG.
 
         matplotlib is avoided everywhere in this app: importing pyplot under
         Pyodide triggers a font-cache build that never completes (measured >330 s
@@ -435,7 +507,7 @@ def server(input, output, session):
         crisp at any zoom.
         """
         gdf = selected()
-        a, b = input.canopy_var(), input.lihtc_var()
+        a, b = input.env_var(), input.lihtc_var()
         sub = gdf[[a, b]].dropna()
         if sub.empty:
             return ui.div("No data for the current filters.", class_="p-4 text-muted")
@@ -493,8 +565,8 @@ def server(input, output, session):
                 f'stroke="#c85a5a" stroke-width="2"/>'
             )
             caption = (
-                f"OLS slope {slope:+.4f} canopy-points per unit "
-                f"(intercept {intercept:.1f}%)"
+                f"OLS slope {slope:+.4f} {ENV_LABELS[a]} per LIHTC unit "
+                f"(intercept {intercept:.1f})"
             )
 
         parts.append(
@@ -504,13 +576,13 @@ def server(input, output, session):
         parts.append(
             f'<text x="14" y="{pad_t + plot_h / 2}" font-size="12" fill="#333" '
             f'text-anchor="middle" transform="rotate(-90 14 {pad_t + plot_h / 2})">'
-            f"{CANOPY_VARS[a]}</text>"
+            f"{ENV_LABELS[a]}</text>"
         )
 
         svg = (
             f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" '
             f'xmlns="http://www.w3.org/2000/svg" role="img" '
-            f'aria-label="Scatter of {CANOPY_VARS[a]} against {LIHTC_VARS[b]}">'
+            f'aria-label="Scatter of {ENV_LABELS[a]} against {LIHTC_VARS[b]}">'
             + "".join(parts)
             + "</svg>"
         )
@@ -520,20 +592,30 @@ def server(input, output, session):
             class_="p-2",
         )
 
+    @render.ui
+    def gap_caption():
+        return ui.p(
+            f"{unit_label_pl().capitalize()} in the gap corner of the grid - "
+            f"the {_gap_phrase()}.",
+            class_="text-muted small",
+        )
+
     # ---- green-gap table ----
     @render.data_frame
     def gap_table():
         gdf = classed()
         if gdf.empty:
             return pd.DataFrame()
-        a, b = input.canopy_var(), input.lihtc_var()
-        gap = gdf[(gdf["_bi_a"] == 0) & (gdf["_bi_b"] == 2)]
+        a, b = input.env_var(), input.lihtc_var()
+        gap = gdf[(gdf["_bi_a"] == worst_env_row(a)) & (gdf["_bi_b"] == 2)]
         out = (
             gap[["GEOID", "NAMELSAD", "county", a, b]]
             .sort_values(b, ascending=False)
-            .rename(columns={a: CANOPY_VARS[a], b: LIHTC_VARS[b], "NAMELSAD": "Tract"})
+            .rename(
+                columns={a: ENV_LABELS[a], b: LIHTC_VARS[b], "NAMELSAD": unit_label().capitalize()}
+            )
         )
-        out[CANOPY_VARS[a]] = out[CANOPY_VARS[a]].round(1)
+        out[ENV_LABELS[a]] = out[ENV_LABELS[a]].round(1)
         return render.DataGrid(out, height="420px")
 
 
