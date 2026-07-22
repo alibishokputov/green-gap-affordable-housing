@@ -35,12 +35,17 @@ install.
 
 ## Housing type and environment
 
-A second, parcel-scale view adds the comparison the areal dashboard cannot make. It sorts
-multifamily rental buildings into **subsidised**, **NOAH** (naturally occurring affordable
-housing), and **market-rate**, then contrasts them on the tree canopy, summer heat, and flood
-exposure measured at each building's own footprint. NOAH — unsubsidised stock that rents
-affordably without a program — is inferred from the assessor's value per unit, using public data
-only.
+**[→ Housing type & environment dashboard](dashboard-housing/)** is a second, parcel-scale view
+that adds the comparison the areal dashboard cannot make. It sorts multifamily rental buildings
+into **subsidised**, **NOAH** (naturally occurring affordable housing), and **market-rate**, then
+contrasts them on the tree canopy and summer heat measured at each building's own footprint. NOAH
+— unsubsidised stock that rents affordably without a program — is inferred from the assessor's
+value per unit, using public data only.
+
+It has five tabs: an environmental choropleth with buildings coloured by type, a block-group
+choropleth of units by type, the per-state type contrast, a value-per-unit-versus-environment
+scatter, and an adjusted regression showing each type's gap against market-rate before and after
+controls.
 
 See **[Data & methods](data-methods.qmd#housing-type-and-environment-parcel-scale-dashboard)** for
 how buildings are defined, how the three types are labelled, and what the type contrast does and

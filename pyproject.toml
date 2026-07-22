@@ -21,6 +21,7 @@ dependencies = [
     "pandas",
     "scipy",
     "scikit-learn",
+    "statsmodels",       # OLS with robust SEs for the type-contrast regression
     "pyarrow",           # fast parquet / arrow IO
     "openpyxl",          # read the .xlsx data dictionaries / NHPD
     "tqdm",

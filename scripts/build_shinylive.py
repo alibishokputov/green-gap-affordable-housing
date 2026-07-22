@@ -56,6 +56,18 @@ GEOGS = {
     },
 }
 
+# The second, parcel-scale dashboard (housing type x environment). It is a
+# self-contained Shiny app reading three committed data files - no vendored greengap
+# modules, no matplotlib. These files are committed like the areal GeoJSONs because
+# CI cannot rebuild them (they need the rasters, the assessor pull, and an ACS key).
+# Regenerate with: uv run python -m greengap.type_regression_data export
+HOUSING_APP_SRC = PROJ_ROOT / "app" / "housing_app.py"
+HOUSING_DATA = [
+    PROJ_ROOT / "app" / "buildings_types.geojson",
+    PROJ_ROOT / "app" / "bg_types.geojson",
+    PROJ_ROOT / "app" / "type_regression.json",
+]
+
 # Every module the app imports, plus their transitive deps: shinylive installs
 # exactly this list and resolves nothing itself.
 # geopandas/shapely/pyproj/scipy/numpy/pandas ship with Pyodide already.
@@ -178,6 +190,36 @@ def _assert_no_matplotlib(staging: Path) -> None:
     print("checked: staged app imports no matplotlib")
 
 
+def build_housing_dashboard(out: Path, staging: Path) -> None:
+    """Export the parcel-scale housing-type dashboard to its own static directory.
+
+    Self-contained: ``housing_app.py`` plus its three committed data files, staged
+    as ``app.py`` so shinylive finds the entry point. Skipped (with a note) if the
+    data files are absent, so the areal build never fails on their account.
+    """
+    missing = [p.name for p in HOUSING_DATA if not p.exists()]
+    if missing or not HOUSING_APP_SRC.exists():
+        print(f"skipping housing dashboard: missing {missing or [HOUSING_APP_SRC.name]}")
+        return
+
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    shutil.copy2(HOUSING_APP_SRC, staging / "app.py")
+    for data in HOUSING_DATA:
+        shutil.copy2(data, staging / data.name)
+    # folium + numpy + geopandas only; same requirement set as the areal app.
+    (staging / "requirements.txt").write_text("\n".join(REQUIREMENTS) + "\n")
+
+    _assert_no_matplotlib(staging)
+
+    out.mkdir(parents=True, exist_ok=True)
+    exe = Path(sys.executable).parent / "shinylive"
+    cmd = [str(exe)] if exe.exists() else [shutil.which("shinylive") or "shinylive"]
+    subprocess.run([*cmd, "export", str(staging), str(out)], check=True)
+    print(f"exported housing dashboard -> {out}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -243,6 +285,13 @@ def main() -> None:
     subprocess.run([*cmd, "export", str(staging), str(out)], check=True)
 
     print(f"exported static dashboard -> {out}")
+
+    # Second dashboard: parcel-scale housing type x environment, at <out>-housing.
+    build_housing_dashboard(
+        out=out.parent / f"{out.name}-housing",
+        staging=staging.parent / "shinylive_housing",
+    )
+
     print(f"preview:  python3 -m http.server --directory {out} 8000")
 
 

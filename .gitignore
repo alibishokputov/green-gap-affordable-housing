@@ -207,3 +207,6 @@ data/**
 !data/external/gee/
 !data/**/.gitkeep
 **/*.quarto_ipynb
+
+# CoStar proprietary field dictionary — never commit
+references/DataExport*.xlsx

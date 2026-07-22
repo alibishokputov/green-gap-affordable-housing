@@ -268,33 +268,72 @@ the building's immediate green context rather than only its roof and pavement.
 flowchart TD
   A["Building footprint"] --> B["Chesapeake 1 m<br/>-> canopy_pct"]
   A --> C["Landsat summer median<br/>-> mean_lst, mean_ndvi"]
-  A --> D["FEMA NFHL overlay<br/>-> in_floodplain"]
   B --> E["Typed building<br/>+ environment table"]
   C --> E
-  D --> E
 ```
 
-Flood exposure is a vector overlay of the FEMA National Flood Hazard Layer and
-activates only when that layer is supplied; until then the flood column is left empty
-rather than defaulted to "no flood risk".
+A FEMA National Flood Hazard Layer overlay is coded (Special Flood Hazard Area
+intersection) but not yet in the dashboard: the current NFHL pull is partial, so a
+flood flag would undercount exposure. It is deferred until a complete flood layer is
+loaded rather than shipped as an incomplete variable.
+
+## Neighbourhood covariates and the adjusted contrast
+
+The unadjusted type contrast conditions on nothing, so any gap mixes the effect of
+housing type with where each type sits. To separate the two, each building is joined
+to its block group and a set of ACS 2022 5-year covariates — median household income,
+poverty rate, share with a bachelor's degree or higher, Black and Hispanic
+population shares, and population density. These enter an adjusted regression of the
+environmental measure on housing type.
+
+The estimand is a *conditional* exposure difference: the gap between NOAH (or
+subsidised) and market-rate multifamily after accounting for observed structure and
+neighbourhood characteristics. It is not a causal effect. Unobserved selection —
+why a building of a given type sits where it does — is not addressed.
+
+```{mermaid}
+flowchart TD
+  A["Environmental measure<br/>(canopy, LST, ...)"] --> M["OLS, HC3 robust SEs"]
+  B["Housing type dummies<br/>market-rate = baseline"] --> M
+  C["Structure: age,<br/>log lot area, log units"] --> M
+  D["ACS block group: income,<br/>poverty, education, race, density"] --> M
+  E["Jurisdiction fixed effects"] --> M
+  M --> G["Gap vs market-rate,<br/>per state + pooled"]
+```
+
+Modelling choices worth stating. The outcome stays in natural units (percentage
+points, degrees) so a coefficient reads directly as a canopy or temperature gap;
+continuous controls are standardised so their coefficients are comparable and the
+intercept stays interpretable. Market-rate is the omitted baseline, so each
+housing-type coefficient is that type's gap against comparable market-rate stock.
+The model is fit **separately for Maryland and DC** — the raw gap has opposite signs
+in the two, and a pooled fit would average that away — with a pooled specification
+(jurisdiction fixed effects) shown alongside for reference.
 
 ## Reading the housing-type dashboard
 
-Three views, all filterable by state, housing type, and environmental measure.
+Five views, all filterable by state, housing type, and environmental measure.
 
-- **Type map.** Every building as a point coloured by type. It answers where each
-  type of multifamily stock sits, and lets the eye pick out whether NOAH clusters
-  apart from market-rate.
-- **Type contrast.** The median of the chosen environmental measure for each type,
-  shown separately for Maryland and DC. The separation is deliberate — pooling the
-  two states hides that the type–environment relationship differs between them.
+- **Type map.** A block-group choropleth of the chosen environmental measure, with
+  buildings drawn as points coloured by housing type over it. A legend names the
+  three types. It answers where each type sits relative to the surrounding
+  environmental gradient.
+- **Type choropleth.** Block-group counts of units of the selected housing types,
+  so the concentration of NOAH or market-rate stock reads at the areal scale the
+  first dashboard uses.
+- **Type contrast.** The median environmental measure for each type, Maryland and DC
+  shown separately. These are raw differences, no controls.
 - **Value and environment.** Value per unit against the environmental measure, with
   the NOAH cutoff drawn as a horizontal line, so the affordability gradient and the
-  threshold's position are both visible at once.
+  threshold's position are both visible.
+- **Adjusted gaps.** The regression gaps against market-rate, unadjusted (hollow)
+  and controls-adjusted (solid), with 95% confidence intervals, per state.
 
-The headline value box reports the NOAH-minus-market-rate difference on the chosen
-measure. A positive canopy difference means NOAH buildings sit at higher canopy than
-market-rate; a positive temperature difference means they sit hotter.
+The headline value box reports the raw **difference in medians** between NOAH and
+market-rate on the chosen measure — a positive canopy value means NOAH sits at
+higher canopy, a positive temperature value means it sits hotter. It is a
+descriptive difference, not a correlation or an adjusted estimate; the Adjusted gaps
+tab is where controls enter.
 
 ## What the contrast shows, and a caution
 
@@ -319,6 +358,19 @@ conditions on nothing, and the same value proxy that defines NOAH is correlated 
 the neighbourhoods a building sits in. Read the contrast as a description of where
 these types are, and treat the cross-state reversal as a reason to model the two
 jurisdictions separately rather than pool them.
+
+The adjusted contrast changes the reading, and differently in each state. For tree
+canopy, controls *reveal* a NOAH advantage in Maryland that the raw comparison hides
+— the NOAH gap moves from roughly zero (−0.6 pp, CI crossing zero) to +2.8 pp
+(95% CI +0.2 to +5.4) once structure and neighbourhood are held constant. In DC the
+raw +7.8 pp NOAH canopy advantage *shrinks* to +2.2 pp (+0.2 to +4.1): most of the
+District's apparent gap is neighbourhood composition, but a conditional gap remains.
+Summer surface temperature tells a parallel story with a sign flip in Maryland: the
+raw MD NOAH coefficient is warmer (+0.6 °C) but the adjusted one is cooler (−0.7 °C,
+−1.0 to −0.3), while DC stays cooler both raw and adjusted. That the adjusted gaps
+converge to a similar modest range across the two states, from very different raw
+starting points, is the substance of the adjustment; that unobserved selection still
+sits behind the value proxy is the reason none of it is causal.
 
 ---
 
