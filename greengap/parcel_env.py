@@ -1,4 +1,4 @@
-"""Parcel-scale environmental exposure for the labelled multifamily buildings.
+"""Parcel-scale environmental exposure for the labeled multifamily buildings.
 
 Extracts, per building footprint, the same environmental measures the areal
 pipeline computes for census units, but at the building scale so housing types can
@@ -49,7 +49,7 @@ from greengap.dataset import (
     _resolve_raster,
     derive_canopy_columns,
 )
-from greengap.housing_type import labelled_path
+from greengap.housing_type import labeled_path
 
 app = typer.Typer(help=__doc__, no_args_is_help=True)
 
@@ -239,14 +239,33 @@ def compute_flood(buildings: gpd.GeoDataFrame) -> pd.DataFrame:
 # --------------------------------------------------------------------------- #
 # Build                                                                        #
 # --------------------------------------------------------------------------- #
+# Environmental columns are keyed on building_id and do not depend on the housing
+# labels; labels do (NOAH cutoffs change). On a cache hit the expensive extraction
+# is reused but the labels are refreshed from labeled_path(), so relabeling never
+# forces a raster re-extraction.
+ENV_COLS = [
+    "building_id", "canopy_pct", "natural_canopy_pct", "land_coverage",
+    "mean_lst", "mean_ndvi", "mean_ndbi", "mean_ndwi", "mean_albedo", "in_floodplain",
+]
+
+
 def build(force: bool = False, buffer: float = 0.0) -> gpd.GeoDataFrame:
-    """Join canopy + LST + flood onto the labelled buildings."""
+    """Join canopy + LST + flood onto the labeled buildings.
+
+    The environmental extraction is cached; the housing labels are re-merged fresh
+    each call so a change to the NOAH cutoff does not require re-extraction.
+    """
     path = parcel_env_path()
     if path.exists() and not force:
-        logger.info(f"parcel_env: cached -> {path}")
-        return gpd.read_parquet(path)
+        cached = gpd.read_parquet(path)
+        labels = gpd.read_parquet(labeled_path())
+        env = pd.DataFrame(cached[[c for c in ENV_COLS if c in cached.columns]])
+        refreshed = labels.merge(env, on="building_id", how="left")
+        refreshed = gpd.GeoDataFrame(refreshed, geometry="geometry", crs=labels.crs)
+        logger.info(f"parcel_env: cached env + refreshed labels -> {len(refreshed):,}")
+        return refreshed
 
-    buildings = gpd.read_parquet(labelled_path()).to_crs(CORRIDOR_CRS)
+    buildings = gpd.read_parquet(labeled_path()).to_crs(CORRIDOR_CRS)
     extract_geom = buildings.copy()
     if buffer > 0:
         # Extract over the footprint plus a ring for the building's green context.
@@ -312,7 +331,7 @@ def build_cmd(
     force: bool = typer.Option(False, help="Recompute instead of using cache."),
     buffer: float = typer.Option(0.0, help="Metres to buffer footprints before extraction."),
 ):
-    """Extract parcel-scale environmental exposure for the labelled buildings."""
+    """Extract parcel-scale environmental exposure for the labeled buildings."""
     build(force=force, buffer=buffer)
 
 

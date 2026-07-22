@@ -2,7 +2,7 @@
 
 Pulls a compact set of 2022 ACS 5-year block-group variables from the Census API
 and joins them to each multifamily building via the building's block group. These
-are the neighbourhood controls for the adjusted type-contrast regression: income,
+are the neighborhood controls for the adjusted type-contrast regression: income,
 poverty, education, race/ethnicity, and population density.
 
 Run::

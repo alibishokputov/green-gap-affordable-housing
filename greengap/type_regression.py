@@ -1,8 +1,8 @@
 """Adjusted type-contrast regression: environmental exposure across housing types.
 
 Estimates the conditional difference in an environmental measure (tree canopy,
-summer LST, ...) between NOAH / subsidised multifamily and market-rate multifamily,
-after accounting for observed building and neighbourhood characteristics. This is
+summer LST, ...) between NOAH / subsidized multifamily and market-rate multifamily,
+after accounting for observed building and neighborhood characteristics. This is
 the estimand the project's design targets: a *conditional* exposure difference
 across housing types, not a causal effect.
 
@@ -10,7 +10,7 @@ across housing types, not a causal effect.
                  so a coefficient reads directly as "pp of canopy" or "degC"
     key terms  = housing-type dummies, market-rate as the baseline, so each
                  coefficient is that type's gap versus market-rate
-    controls   = structure (age, log lot area, log units), neighbourhood ACS
+    controls   = structure (age, log lot area, log units), neighborhood ACS
                  (income, poverty, education, race, density), flood zone, and
                  jurisdiction fixed effects
     inference  = heteroskedasticity-robust (HC3) standard errors
@@ -24,7 +24,7 @@ Run::
     uv run python -m greengap.type_regression run --outcome canopy_pct
     uv run python -m greengap.type_regression run --outcome mean_lst --state DC
 
-Continuous controls are standardised (mean 0, sd 1) so their coefficients are
+Continuous controls are standardized (mean 0, sd 1) so their coefficients are
 comparable and the intercept stays interpretable; the outcome and the type dummies
 are left in natural units.
 """
@@ -40,10 +40,10 @@ app = typer.Typer(help=__doc__, no_args_is_help=True)
 # Housing types entered as dummies; market-rate is the omitted baseline so each
 # coefficient is a contrast against market-rate multifamily.
 TYPE_BASELINE = "market_rate"
-TYPE_TERMS = ["noah", "subsidised"]
+TYPE_TERMS = ["noah", "subsidized"]
 
-# Continuous controls, standardised before fitting. log1p for the heavy-tailed
-# size variables; the ACS covariates enter on their natural scale then standardised.
+# Continuous controls, standardized before fitting. log1p for the heavy-tailed
+# size variables; the ACS covariates enter on their natural scale then standardized.
 LOG_CONTROLS = ["lot_area", "units"]
 LINEAR_CONTROLS = [
     "year_built", "median_income", "poverty_rate",
@@ -54,13 +54,13 @@ LINEAR_CONTROLS = [
 # once a complete flood layer is loaded.
 
 
-def _standardise(s: pd.Series) -> pd.Series:
+def _standardize(s: pd.Series) -> pd.Series:
     sd = s.std(ddof=0)
     return (s - s.mean()) / sd if sd and not np.isnan(sd) else s * 0.0
 
 
 def build_design(df: pd.DataFrame, outcome: str, with_controls: bool) -> pd.DataFrame:
-    """Assemble the modelling frame: outcome, type dummies, and (optionally) controls."""
+    """Assemble the modeling frame: outcome, type dummies, and (optionally) controls."""
     keep = df["housing_type"].isin([TYPE_BASELINE] + TYPE_TERMS)
     d = df.loc[keep].copy()
 
@@ -71,10 +71,10 @@ def build_design(df: pd.DataFrame, outcome: str, with_controls: bool) -> pd.Data
 
     if with_controls:
         for c in LOG_CONTROLS:
-            out[c] = _standardise(np.log1p(pd.to_numeric(d[c], errors="coerce")))
+            out[c] = _standardize(np.log1p(pd.to_numeric(d[c], errors="coerce")))
         for c in LINEAR_CONTROLS:
             if c in d.columns:
-                out[c] = _standardise(pd.to_numeric(d[c], errors="coerce"))
+                out[c] = _standardize(pd.to_numeric(d[c], errors="coerce"))
         # Jurisdiction fixed effects (drop first to avoid collinearity with const).
         juris = pd.get_dummies(d["jurisdiction"], prefix="j", drop_first=True, dtype=float)
         out = pd.concat([out, juris], axis=1)
@@ -93,7 +93,7 @@ def fit(df: pd.DataFrame, outcome: str, with_controls: bool):
 
 
 def type_gaps(df: pd.DataFrame, outcome: str, with_controls: bool) -> pd.DataFrame:
-    """Return the NOAH- and subsidised-vs-market coefficients with 95% CIs."""
+    """Return the NOAH- and subsidized-vs-market coefficients with 95% CIs."""
     res = fit(df, outcome, with_controls)
     rows = []
     for t in TYPE_TERMS:

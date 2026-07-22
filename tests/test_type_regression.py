@@ -4,13 +4,13 @@ import pandas as pd
 from greengap.type_regression import TYPE_TERMS, build_design, type_gaps
 
 
-def _synthetic(n=600, noah_effect=5.0, subsidised_effect=-3.0, seed=0):
+def _synthetic(n=600, noah_effect=5.0, subsidized_effect=-3.0, seed=0):
     rng = np.random.default_rng(seed)
-    ht = rng.choice(["market_rate", "noah", "subsidised"], n)
+    ht = rng.choice(["market_rate", "noah", "subsidized"], n)
     canopy = (
         20.0
         + noah_effect * (ht == "noah")
-        + subsidised_effect * (ht == "subsidised")
+        + subsidized_effect * (ht == "subsidized")
         + rng.normal(0, 2, n)
     )
     return pd.DataFrame({
@@ -34,11 +34,11 @@ def _synthetic(n=600, noah_effect=5.0, subsidised_effect=-3.0, seed=0):
 def test_recovers_known_type_effects():
     g = type_gaps(_synthetic(), "canopy_pct", with_controls=True).set_index("type")
     assert abs(g.loc["noah", "gap_vs_market"] - 5.0) < 1.0
-    assert abs(g.loc["subsidised", "gap_vs_market"] - (-3.0)) < 1.0
+    assert abs(g.loc["subsidized", "gap_vs_market"] - (-3.0)) < 1.0
 
 
 def test_market_rate_is_the_baseline():
-    # The design has type dummies for NOAH and subsidised only; market-rate is
+    # The design has type dummies for NOAH and subsidized only; market-rate is
     # implicit (the intercept), so each coefficient is a contrast against it.
     design = build_design(_synthetic(), "canopy_pct", with_controls=False)
     assert set(f"type_{t}" for t in TYPE_TERMS) <= set(design.columns)
@@ -53,6 +53,6 @@ def test_confidence_interval_brackets_estimate():
 
 def test_no_true_effect_is_not_significant():
     # With no baked-in gap, the NOAH coefficient should be small and its CI cross 0.
-    g = type_gaps(_synthetic(noah_effect=0.0, subsidised_effect=0.0, seed=3), "canopy_pct",
+    g = type_gaps(_synthetic(noah_effect=0.0, subsidized_effect=0.0, seed=3), "canopy_pct",
                   with_controls=True).set_index("type")
     assert g.loc["noah", "ci_low"] <= 0 <= g.loc["noah", "ci_high"]

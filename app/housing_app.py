@@ -2,23 +2,23 @@
 
 Where the bivariate dashboard (``app.py``) shows LIHTC-vs-environment co-location
 across census areal units, this one works at the **building** scale and adds the
-comparison the areal view cannot make: subsidised vs NOAH vs market-rate multifamily,
+comparison the areal view cannot make: subsidized vs NOAH vs market-rate multifamily,
 contrasted on their parcel-scale canopy and summer heat.
 
 Tabs:
 
     Type map        block-group choropleth of an environmental measure, with
-                    buildings as points coloured by housing type (legend included)
-    Type choropleth block-group units by housing type (NOAH / market / subsidised)
+                    buildings as points colored by housing type (legend included)
+    Type choropleth block-group units by housing type (NOAH / market / subsidized)
     Type contrast   median environmental exposure per type, per state
     Value x env     value/unit against an environmental measure, NOAH cutoff drawn
     Adjusted gaps   type-vs-market regression gaps, unadjusted and controls-adjusted
 
-Housing type is descriptive: subsidised = within 30 m of an active LIHTC/NHPD
-record; NOAH = unsubsidised below the per-state value/unit cutoff; market-rate =
-unsubsidised above it. The unadjusted contrasts are raw differences in medians; the
+Housing type is descriptive: subsidized = within 30 m of an active LIHTC/NHPD
+record; NOAH = unsubsidized below the per-state value/unit cutoff; market-rate =
+unsubsidized above it. The unadjusted contrasts are raw differences in medians; the
 adjusted gaps come from a per-state regression on housing type + structure and
-neighbourhood controls with jurisdiction fixed effects (precomputed - statsmodels
+neighborhood controls with jurisdiction fixed effects (precomputed - statsmodels
 is unavailable under Pyodide). All of it is associational, not causal.
 
 Run locally::
@@ -45,16 +45,16 @@ POINTS_GEOJSON = HERE / "buildings_types.geojson"
 BG_GEOJSON = HERE / "bg_types.geojson"
 REG_JSON = HERE / "type_regression.json"
 
-# Housing types, display order + a colour-blind-safe palette (Okabe-Ito subset).
-TYPE_ORDER = ["subsidised", "noah", "market_rate"]
+# Housing types, display order + a color-blind-safe palette (Okabe-Ito subset).
+TYPE_ORDER = ["subsidized", "noah", "market_rate"]
 TYPE_LABELS = {
-    "subsidised": "Subsidised (LIHTC / NHPD)",
-    "noah": "NOAH (unsubsidised, below cutoff)",
+    "subsidized": "Subsidized (LIHTC / NHPD)",
+    "noah": "NOAH (unsubsidized, below cutoff)",
     "market_rate": "Market-rate",
     "unknown": "Unknown (no unit count)",
 }
 TYPE_COLORS = {
-    "subsidised": "#0072B2",   # blue
+    "subsidized": "#0072B2",   # blue
     "noah": "#009E73",         # green
     "market_rate": "#D55E00",  # vermillion
     "unknown": "#999999",
@@ -71,7 +71,7 @@ ENV_VARS = {
 ENV_LABELS = {k: v["label"] for k, v in ENV_VARS.items()}
 
 # Sequential ramps for the choropleths (light -> dark). Canopy/NDVI: greener = more;
-# LST: hotter = redder. Chosen 5-step ramps, colour-blind-reasonable.
+# LST: hotter = redder. Chosen 5-step ramps, color-blind-reasonable.
 RAMP_GREEN = ["#f7fcf5", "#c7e9c0", "#74c476", "#31a354", "#006d2c"]
 RAMP_HEAT = ["#fee5d9", "#fcae91", "#fb6a4a", "#de2d26", "#a50f15"]
 RAMP_BLUE = ["#f7fbff", "#c6dbef", "#6baed6", "#3182bd", "#08519c"]
@@ -150,8 +150,8 @@ app_ui = ui.page_sidebar(
         ui.output_ui("legend"),
         ui.hr(),
         ui.markdown(
-            "**NOAH** is unsubsidised multifamily below the per-state assessed "
-            "value/unit cutoff. **Market-rate** is unsubsidised above it. Types "
+            "**NOAH** is unsubsidized multifamily below the per-state assessed "
+            "value/unit cutoff. **Market-rate** is unsubsidized above it. Types "
             "differ in siting and age; gaps are descriptive, not causal."
         ),
         width=340,
@@ -447,7 +447,7 @@ def server(input, output, session):
                     f'— {STATES.get(scope, "pooled (jurisdiction FE)")}</div>')
         html.append('<div style="font-size:12px;color:#888;margin:2px 0 10px">'
                     'Each bar is a housing type minus market-rate. Hollow = unadjusted, '
-                    'solid = adjusted for structure, ACS neighbourhood, and '
+                    'solid = adjusted for structure, ACS neighborhood, and '
                     'jurisdiction. Whiskers are 95% CIs (HC3).</div>')
         svg_h = len(rows) * rowh + 40
         parts = [f'<svg viewBox="0 0 {w} {svg_h}" width="100%" height="{svg_h}" '

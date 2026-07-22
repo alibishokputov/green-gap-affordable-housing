@@ -1,6 +1,6 @@
 """Assemble the building-level frame for the type-contrast regression and dashboard.
 
-Joins the environmentally-labelled buildings (``greengap.parcel_env``) to their
+Joins the environmentally-labeled buildings (``greengap.parcel_env``) to their
 block-group ACS covariates (``greengap.acs``) into one analysis frame, cached to
 ``data/processed/mf_buildings_analysis.parquet``. This is the single table both the
 regression and the enhanced dashboard read.
@@ -70,7 +70,7 @@ def export_bg_choropleth() -> Path:
 
     The environmental backdrop and geometry come from the areal analysis table
     (``bg_analysis.parquet``); the per-type unit counts are aggregated from the
-    labelled buildings. This is the choropleth-with-type-layers tab's data.
+    labeled buildings. This is the choropleth-with-type-layers tab's data.
     """
     b = load_regression_frame()
     counts = (

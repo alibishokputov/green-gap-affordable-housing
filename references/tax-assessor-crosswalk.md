@@ -147,10 +147,10 @@ uv run python -m greengap.assessor build --broad-dc   # widen DC multifamily
 
 ---
 
-# Housing-type labelling and parcel-scale environment
+# Housing-type labeling and parcel-scale environment
 
 Built on `parcels_mf.parquet` in two further modules. Output tables:
-`data/processed/mf_buildings_labelled.parquet` (typed buildings) and
+`data/processed/mf_buildings_labeled.parquet` (typed buildings) and
 `mf_buildings_env.parquet` (+ canopy / LST / flood).
 
 ## Building aggregation (`greengap.housing_type`, stage 1)
@@ -171,7 +171,7 @@ count is untrustworthy, so it is typed `unknown`, not market-rate (104 buildings
 
 ## Subsidy flag (stage 2)
 
-A building is `subsidised` if its footprint is within **30 m** of an active
+A building is `subsidized` if its footprint is within **30 m** of an active
 LIHTC or NHPD point:
 
 | Source | File | Filter |
@@ -180,23 +180,27 @@ LIHTC or NHPD point:
 | NHPD (national) | `data/external/National Housing Properties (1).xlsx` | MD + DC, `PropertyStatus = Active` |
 
 NHPD is filtered to **active** subsidies: an expired NHPD property has lost its
-subsidy and is, if anything, NOAH again. Result: 865 subsidised buildings
+subsidy and is, if anything, NOAH again. Result: 865 subsidized buildings
 (MD 17.2% is a corrected figure — an earlier MD-only NHPD run understated DC).
 
 ## NOAH vs market-rate (stage 3)
 
-Among unsubsidised, placeable buildings, `housing_type` splits on assessed value
-per unit at a **per-state quantile** (DC values run higher, so a single dollar cut
-would misclassify one state). Three variants are stored for sensitivity:
+Among unsubsidized, placeable buildings, `housing_type` splits on assessed value
+per unit at an **AMI-anchored cutoff** (`greengap.noah_threshold`): an affordable
+rent at a target AMI level → affordable market value via a gross rent multiplier
+(10×) → affordable *assessed* value via a per-state assessment ratio measured from
+the study's own multifamily sales (MD 0.75, DC 0.93). Three AMI levels are stored
+for sensitivity; 60% AMI (the LIHTC standard) is the default.
 
-| Variant | Quantile | MD cutoff | DC cutoff |
+| Variant | AMI level | MD cutoff | DC cutoff |
 |---|---|---|---|
-| strict | 0.25 | ~$68k | ~$112k |
-| central (default) | 0.40 | ~$90k | ~$143k |
-| broad | 0.50 | ~$105k | ~$169k |
+| ami50 | 50% AMI | ~$123k | ~$153k |
+| ami60 (default) | 60% AMI | ~$148k | ~$184k |
+| ami80 | 80% AMI | ~$197k | ~$245k |
 
-Condominium codes are already excluded upstream. Final labels (central variant):
-**subsidised 865, NOAH 1,660, market-rate 2,491, unknown 348.**
+Condominium and cooperative codes are excluded upstream (per-unit ownership, not
+rental stock). Final labels (ami60 default): **subsidized 865, NOAH 2,639,
+market-rate 1,512, unknown 348.**
 
 ## Parcel-scale environment (`greengap.parcel_env`)
 
@@ -211,13 +215,13 @@ context rather than the roof alone.
 Descriptive finding to handle carefully: the NOAH-vs-market environmental contrast
 is **heterogeneous and opposite-signed across states**. In DC, NOAH buildings sit
 at *higher* canopy (15% vs 5.5%) and *lower* summer LST than market-rate; in MD the
-two are near-identical. This is associational (siting, age, neighbourhood
+two are near-identical. This is associational (siting, age, neighborhood
 unadjusted) and is a direct caution against pooling MD and DC.
 
 ## Reproduce (housing type + environment)
 
 ```
-uv run python -m greengap.housing_type build          # -> mf_buildings_labelled.parquet
+uv run python -m greengap.housing_type build          # -> mf_buildings_labeled.parquet
 uv run python -m greengap.parcel_env                   # -> mf_buildings_env.parquet
 uv run python -m greengap.parcel_env --buffer 30       # footprint + 30 m ring
 uv run python -m greengap.parcel_env export-dashboard  # app/buildings_types.geojson

@@ -37,19 +37,19 @@ install.
 
 **[→ Housing type & environment dashboard](dashboard-housing/)** is a second, parcel-scale view
 that adds the comparison the areal dashboard cannot make. It sorts multifamily rental buildings
-into **subsidised**, **NOAH** (naturally occurring affordable housing), and **market-rate**, then
+into **subsidized**, **NOAH** (naturally occurring affordable housing), and **market-rate**, then
 contrasts them on the tree canopy and summer heat measured at each building's own footprint. NOAH
-— unsubsidised stock that rents affordably without a program — is inferred from the assessor's
+— unsubsidized stock that rents affordably without a program — is inferred from the assessor's
 value per unit, using public data only.
 
-It has five tabs: an environmental choropleth with buildings coloured by type, a block-group
+It has five tabs: an environmental choropleth with buildings colored by type, a block-group
 choropleth of units by type, the per-state type contrast, a value-per-unit-versus-environment
 scatter, and an adjusted regression showing each type's gap against market-rate before and after
 controls.
 
 See **[Data & methods](data-methods.qmd#housing-type-and-environment-parcel-scale-dashboard)** for
-how buildings are defined, how the three types are labelled, and what the type contrast does and
-does not show. The contrast is descriptive: the types differ in siting, age, and neighbourhood, so
+how buildings are defined, how the three types are labeled, and what the type contrast does and
+does not show. The contrast is descriptive: the types differ in siting, age, and neighborhood, so
 a gap describes where they sit, not an effect of housing type. The relationship also differs
 between Maryland and DC, which is a reason to read the two jurisdictions separately.
 

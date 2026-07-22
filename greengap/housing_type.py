@@ -5,8 +5,8 @@ stages, each cached to ``data/``:
 
     buildings   dissolve multi-parcel complexes into building-level records
     subsidy     flag buildings that intersect LIHTC / NHPD (drop from NOAH pool)
-    label       split the unsubsidised pool by assessed value/unit -> NOAH vs market
-    build       write the labelled building table -> data/processed/
+    label       split the unsubsidized pool by assessed value/unit -> NOAH vs market
+    build       write the labeled building table -> data/processed/
 
 Run::
 
@@ -60,14 +60,14 @@ LIHTC_MEMBER = "LIHTCPUB.xlsx"
 LIHTC_ENGINE = "calamine"
 LIHTC_COLS = {"id": "hud_id", "state": "proj_st", "lat": "latitude", "lon": "longitude"}
 
-# NHPD (National Housing Preservation Database) - subsidised & at-risk stock.
+# NHPD (National Housing Preservation Database) - subsidized & at-risk stock.
 # The national extract covers MD and DC (2,454 properties); only currently ACTIVE
-# subsidies count as subsidised - an inactive/expired NHPD property has lost its
+# subsidies count as subsidized - an inactive/expired NHPD property has lost its
 # subsidy and is, if anything, NOAH again.
 NHPD_NATIONAL = EXTERNAL_DATA_DIR / "National Housing Properties (1).xlsx"
 NHPD_ACTIVE_STATUS = "Active"
 
-# A parcel is treated as subsidised if a subsidy point falls within this distance
+# A parcel is treated as subsidized if a subsidy point falls within this distance
 # of its polygon. Points are geocoded to rooftop/parcel centroid, so a small
 # tolerance absorbs geocoding slack without reaching neighbouring parcels.
 SUBSIDY_SNAP_M = 30.0
@@ -75,13 +75,15 @@ SUBSIDY_SNAP_M = 30.0
 # --------------------------------------------------------------------------- #
 # NOAH threshold                                                               #
 # --------------------------------------------------------------------------- #
-# NOAH = unsubsidised multifamily whose assessed value per unit falls below an
-# affordability cutoff. There is no single right cutoff; three variants are stored
-# so the label's sensitivity to the line is visible rather than hidden. Cutoffs are
-# per-state quantiles of the unsubsidised value/unit distribution (DC values run
-# higher than MD, so a single dollar figure would misclassify one state).
-NOAH_QUANTILES = {"strict": 0.25, "central": 0.40, "broad": 0.50}
-DEFAULT_NOAH_VARIANT = "central"
+# NOAH = unsubsidized multifamily whose assessed value per unit falls at or below an
+# affordability cutoff. The cutoff is AMI-anchored (see greengap.noah_threshold): an
+# affordable rent at a target AMI level, converted to an affordable assessed value
+# per unit through a gross rent multiplier and a per-state assessment ratio measured
+# from the study's own multifamily sales. Three AMI levels are stored so the label's
+# sensitivity to the affordability line is visible; 60% AMI (the LIHTC standard) is
+# the default. This replaces the earlier arbitrary value/unit quantiles.
+NOAH_AMI_VARIANTS = {"ami50": "ami50", "ami60": "ami60", "ami80": "ami80"}
+DEFAULT_NOAH_VARIANT = "ami60"
 
 # Value/unit above this is not a real per-unit assessment: it flags a building
 # whose value sits on one parcel while its unit count sits on a non-contiguous
@@ -97,8 +99,8 @@ def buildings_path() -> Path:
     return PROCESSED_DATA_DIR / "mf_buildings.parquet"
 
 
-def labelled_path() -> Path:
-    return PROCESSED_DATA_DIR / "mf_buildings_labelled.parquet"
+def labeled_path() -> Path:
+    return PROCESSED_DATA_DIR / "mf_buildings_labeled.parquet"
 
 
 # --------------------------------------------------------------------------- #
@@ -208,7 +210,7 @@ def _load_nhpd_points() -> gpd.GeoDataFrame:
     """Active-subsidy NHPD property points for MD + DC from the national extract."""
     if not NHPD_NATIONAL.exists():
         logger.warning(
-            f"subsidy: no NHPD file at {NHPD_NATIONAL}; DC/MD 'unsubsidised' will "
+            f"subsidy: no NHPD file at {NHPD_NATIONAL}; DC/MD 'unsubsidized' will "
             "exclude LIHTC only and may overstate NOAH."
         )
         return gpd.GeoDataFrame(geometry=[], crs=CORRIDOR_CRS)
@@ -227,7 +229,7 @@ def _load_nhpd_points() -> gpd.GeoDataFrame:
     ).to_crs(CORRIDOR_CRS)
 
 
-def flag_subsidised(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def flag_subsidized(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Mark buildings whose footprint is within ``SUBSIDY_SNAP_M`` of a subsidy point."""
     out = buildings.copy()
     points = [_load_lihtc_points(), _load_nhpd_points()]
@@ -238,9 +240,9 @@ def flag_subsidised(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         how="left", max_distance=SUBSIDY_SNAP_M, distance_col="_d",
     )
     hit = set(near.loc[near["_d"].notna(), "building_id"])
-    out["subsidised"] = out["building_id"].isin(hit)
+    out["subsidized"] = out["building_id"].isin(hit)
     logger.info(
-        f"subsidy: {int(out['subsidised'].sum()):,}/{len(out):,} buildings within "
+        f"subsidy: {int(out['subsidized'].sum()):,}/{len(out):,} buildings within "
         f"{SUBSIDY_SNAP_M:g} m of a LIHTC/NHPD point"
     )
     return out
@@ -249,14 +251,18 @@ def flag_subsidised(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 # --------------------------------------------------------------------------- #
 # Stage 3: NOAH vs market-rate                                                 #
 # --------------------------------------------------------------------------- #
-def label_types(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Assign ``housing_type`` and per-variant NOAH flags.
+def label_types(buildings: gpd.GeoDataFrame, parcels: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Assign ``housing_type`` and per-AMI-variant NOAH flags.
 
-    Subsidised buildings are typed first and removed from the NOAH/market split.
-    Among the unsubsidised with a defined value/unit, the per-state quantile
-    cutoffs place each building below (NOAH) or above (market-rate) the line, once
-    per threshold variant. ``housing_type`` uses ``DEFAULT_NOAH_VARIANT``.
+    Subsidized buildings are typed first and removed from the NOAH/market split.
+    Among the unsubsidized with a trustworthy value/unit, the AMI-anchored cutoff
+    (per jurisdiction, per AMI level) places each building at/below (NOAH) or above
+    (market-rate) the affordability line. ``parcels`` supplies the sales used to
+    estimate the assessment ratio inside the cutoff. ``housing_type`` uses
+    ``DEFAULT_NOAH_VARIANT``.
     """
+    from greengap.noah_threshold import AMI_LEVELS, cutoff_map
+
     out = buildings.copy()
 
     # An implausibly high value/unit means the unit count is not trustworthy for
@@ -274,29 +280,27 @@ def label_types(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
             "ceiling treated as unplaceable (untrustworthy unit count)"
         )
 
-    cut_rows = []
-    for variant, q in NOAH_QUANTILES.items():
+    pool = ~out["subsidized"] & placeable
+    for variant, level in AMI_LEVELS.items():
         col = f"noah_{variant}"
-        out[col] = pd.NA
-        pool = ~out["subsidised"] & placeable
-        for state, sub_idx in out.loc[pool].groupby("state").groups.items():
-            vpu = out.loc[sub_idx, "value_per_unit"]
-            cutoff = vpu.quantile(q)
-            out.loc[sub_idx, col] = vpu <= cutoff
-            cut_rows.append({"variant": variant, "state": state, "cutoff": round(cutoff)})
-        out[col] = out[col].astype("boolean")
-    logger.info("noah cutoffs (value/unit): " + "; ".join(
-        f"{r['variant']}/{r['state']}=${r['cutoff']:,}" for r in cut_rows
-    ))
+        cuts = cutoff_map(parcels, level)  # {jurisdiction -> cutoff}
+        cutoff = out["jurisdiction"].map(cuts)
+        out[col] = (out["value_per_unit"] <= cutoff).where(pool).astype("boolean")
+        by_state = {
+            s: round(cuts[j]) for s, j in
+            (("DC", "District of Columbia"), ("MD", "Montgomery"))
+        }
+        logger.info(f"noah[{variant}] cutoff/unit: " + ", ".join(
+            f"{s}=${c:,}" for s, c in by_state.items()))
 
     default = f"noah_{DEFAULT_NOAH_VARIANT}"
-    unsub = ~out["subsidised"]
+    unsub = ~out["subsidized"]
     htype = pd.Series("unknown", index=out.index, dtype="object")  # default: unplaceable
-    htype[out["subsidised"]] = "subsidised"
+    htype[out["subsidized"]] = "subsidized"
     htype[unsub & placeable] = "market_rate"  # placeable & above the NOAH line
     htype[unsub & placeable & (out[default] == True)] = "noah"  # noqa: E712 (boolean mask)
     out["housing_type"] = pd.Categorical(
-        htype, categories=["subsidised", "noah", "market_rate", "unknown"]
+        htype, categories=["subsidized", "noah", "market_rate", "unknown"]
     )
 
     counts = out["housing_type"].value_counts().to_dict()
@@ -308,19 +312,20 @@ def label_types(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 # Build                                                                        #
 # --------------------------------------------------------------------------- #
 def build(force: bool = False, force_upstream: bool = False) -> gpd.GeoDataFrame:
-    path = labelled_path()
+    path = labeled_path()
     if path.exists() and not force and not force_upstream:
         logger.info(f"housing_type: cached -> {path}")
         return gpd.read_parquet(path)
 
     buildings = aggregate_buildings(force=force_upstream)
-    buildings = flag_subsidised(buildings)
-    labelled = label_types(buildings)
+    buildings = flag_subsidized(buildings)
+    parcels = gpd.read_parquet(parcels_path())  # sales -> assessment ratio in the cutoff
+    labeled = label_types(buildings, parcels)
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    labelled.to_parquet(path)
-    logger.success(f"housing_type: {len(labelled):,} labelled buildings -> {path}")
-    return labelled
+    labeled.to_parquet(path)
+    logger.success(f"housing_type: {len(labeled):,} labeled buildings -> {path}")
+    return labeled
 
 
 # --------------------------------------------------------------------------- #
@@ -337,7 +342,7 @@ def build_cmd(
     force: bool = typer.Option(False, help="Relabel (fast); keep the cached buildings."),
     force_upstream: bool = typer.Option(False, help="Also redo the building aggregation."),
 ):
-    """Build the labelled multifamily building table."""
+    """Build the labeled multifamily building table."""
     build(force=force, force_upstream=force_upstream)
 
 
