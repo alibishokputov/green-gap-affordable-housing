@@ -33,6 +33,21 @@ was built and what it can and cannot support.
 The dashboard runs entirely in your browser (WebAssembly), so there is no server and nothing to
 install.
 
+## Housing type and environment
+
+A second, parcel-scale view adds the comparison the areal dashboard cannot make. It sorts
+multifamily rental buildings into **subsidised**, **NOAH** (naturally occurring affordable
+housing), and **market-rate**, then contrasts them on the tree canopy, summer heat, and flood
+exposure measured at each building's own footprint. NOAH — unsubsidised stock that rents
+affordably without a program — is inferred from the assessor's value per unit, using public data
+only.
+
+See **[Data & methods](data-methods.qmd#housing-type-and-environment-parcel-scale-dashboard)** for
+how buildings are defined, how the three types are labelled, and what the type contrast does and
+does not show. The contrast is descriptive: the types differ in siting, age, and neighbourhood, so
+a gap describes where they sit, not an effect of housing type. The relationship also differs
+between Maryland and DC, which is a reason to read the two jurisdictions separately.
+
 ## Notebooks
 
 - [1.0 Green gap demo](notebooks/1.0-example-green-gap-demo.ipynb):

@@ -115,6 +115,211 @@ highlighted corner flips accordingly. The correlation reported in the dashboard 
 an unadjusted rank correlation across units, shown without a significance marker
 because at these sample sizes significance is uninformative.
 
+# Housing type and environment (parcel-scale dashboard)
+
+The bivariate dashboard above shows where LIHTC affordable housing and environmental
+conditions co-locate across census units. It cannot compare affordable housing to
+anything, because the areal data carry no other housing group. A second, parcel-scale
+dashboard adds that comparison. It works at the **building** scale and sorts
+multifamily rental stock into three types — subsidised, NOAH, and market-rate — then
+contrasts them on the canopy, summer heat, and flood exposure measured at each
+building's own footprint.
+
+Everything here remains cross-sectional and descriptive. A difference between NOAH
+and market-rate buildings reflects where the two types sit, not an effect of the
+housing type. Siting, building age, and neighbourhood composition differ across the
+types and none is adjusted for, so a gap is a statement about co-location, not a
+disparity that housing type produced.
+
+## What the three types mean
+
+None of these categories comes from a registry. Market-rate is the residual, and
+NOAH is derived from an affordability proxy, so the definitions are choices that a
+reader should be able to see and contest.
+
+| Type | Definition | Buildings |
+|---|---|---|
+| **Subsidised** | Footprint within 30 m of an active LIHTC or NHPD record | 865 |
+| **NOAH** | Unsubsidised, assessed value per unit below the per-state cutoff | 1,660 |
+| **Market-rate** | Unsubsidised, assessed value per unit above the cutoff | 2,491 |
+| **Unknown** | Unsubsidised, no trustworthy unit count | 348 |
+
+NOAH — naturally occurring affordable housing — is the policy-relevant category:
+unsubsidised stock that rents affordably without a program and can be lost to the
+market at any time. It has no subsidy record, so it is inferred from a rent proxy.
+The proxy here is the assessor's **value per unit**, using public data only.
+
+## Housing-type data streams
+
+| Stream | Source | Native resolution | Vintage | Dashboard variables |
+|---|---|---|---|---|
+| Parcels and assessed values | MD MdProperty View; DC Owner Polygons | parcel polygon | Feb 2026 (MD); 2026 snapshot (DC) | `value_per_unit`, `units`, `year_built` |
+| Subsidised housing | HUD LIHTC (LIHTCPUB); NHPD national extract | point | Current inventory | `housing_type = subsidised` |
+| Tree canopy and land cover | Chesapeake Bay LULC, 2022 Edition | 1 m | ~2017 (DC), ~2018 (MD) | `canopy_pct`, `natural_canopy_pct` |
+| Surface temperature and indices | Landsat 8 and 9, Collection 2 Level-2 | 30 m (LST ~100 m effective) | Summer 2021 to 2023 | `mean_lst`, `mean_ndvi` |
+| Flood exposure | FEMA National Flood Hazard Layer | polygon | current NFHL | `in_floodplain` (activates when the layer is supplied) |
+
+## Unit of analysis: the building
+
+The unit is the **multifamily building**, not the parcel and not the census area.
+
+| | Parcels | Buildings | Multi-parcel buildings |
+|---|---|---|---|
+| MD (6 counties) + DC | 11,089 | 5,364 | 1,636 |
+
+A single apartment complex is frequently split across several assessor parcels: one
+parcel carries the value and units, and contiguous sub-parcels (garages, common
+areas, phased buildings) report one unit or none. Left as parcels, roughly 2,200 of
+the 11,089 report exactly one unit while carrying large values, which makes value per
+unit meaningless. Aggregating to the building is the prerequisite for every
+comparison the dashboard makes.
+
+## Housing-type processing pipeline
+
+How assessor parcels become the typed, environmentally-joined building table the
+dashboard reads.
+
+```{mermaid}
+flowchart LR
+  MD["MD MdProperty View<br/>parcels + assessed values"] --> P["Multifamily<br/>parcels (11,089)"]
+  DC["DC Owner Polygons<br/>parcels + assessed values"] --> P
+  P --> B["Dissolve to buildings<br/>by contiguity (5,364)"]
+  B --> S["Flag subsidised<br/>LIHTC + NHPD within 30 m"]
+  S --> N["Split unsubsidised by<br/>value/unit -> NOAH vs market"]
+  N --> E["Extract canopy, LST, flood<br/>per footprint"]
+  E --> D["Housing-type<br/>dashboard"]
+```
+
+### Building aggregation
+
+Parcels that share a boundary within the same jurisdiction are treated as one
+building; their values, units, and areas are summed. Owner is deliberately not used
+to merge, because the only owner field available (a mailing address in Maryland, an
+owner name in DC) is shared across unrelated properties held by the same management
+company and would merge buildings that are not one structure.
+
+```{mermaid}
+flowchart TD
+  A["Multifamily parcels<br/>11,089"] --> B["Queen contiguity<br/>within jurisdiction"]
+  B --> C["Connected components<br/>= building groups"]
+  C --> D["Sum value, units, area;<br/>max year built; mode use"]
+  D --> E["5,364 buildings"]
+  E --> F{"value/unit<br/>> $2,000,000?"}
+  F -->|yes| G["Unit count untrustworthy<br/>-> type = unknown"]
+  F -->|no| H["value/unit is<br/>the affordability axis"]
+```
+
+The value-per-unit ceiling catches buildings whose value and unit count sit on
+separate parcels that did not merge, leaving an impossible per-unit figure. These
+are set aside as `unknown` rather than counted as expensive market-rate stock.
+
+### Subsidy flag
+
+A building is subsidised if its footprint is near an active LIHTC or NHPD record.
+NHPD is filtered to active subsidies: a property whose subsidy has expired is no
+longer subsidised, and belongs back in the unsubsidised pool.
+
+```{mermaid}
+flowchart TD
+  A["HUD LIHTC<br/>MD + DC points"] --> C["Union of<br/>subsidy points"]
+  B["NHPD national extract<br/>MD + DC, status = active"] --> C
+  C --> D["Building footprint<br/>within 30 m?"]
+  D -->|yes| E["subsidised"]
+  D -->|no| F["unsubsidised<br/>-> NOAH / market split"]
+```
+
+### NOAH versus market-rate
+
+Among unsubsidised buildings, the value-per-unit cutoff separates NOAH from
+market-rate. The cutoff is a **per-state quantile**, not a single dollar figure,
+because DC assessed values run well above Maryland's; one national threshold would
+label most of one state on the wrong side. Three cutoffs are stored so the label's
+sensitivity to the line is visible rather than hidden.
+
+| Variant | Quantile | Maryland cutoff | DC cutoff |
+|---|---|---|---|
+| Strict | 25th percentile | ~\$68k | ~\$112k |
+| Central (default) | 40th percentile | ~\$90k | ~\$143k |
+| Broad | 50th percentile | ~\$105k | ~\$169k |
+
+```{mermaid}
+flowchart TD
+  A["Unsubsidised buildings<br/>with a valid value/unit"] --> B["Per-state<br/>value/unit distribution"]
+  B --> C{"value/unit below<br/>the cutoff?"}
+  C -->|yes| D["NOAH"]
+  C -->|no| E["market-rate"]
+```
+
+Assessed value per unit is a proxy for rent, not rent itself. It reflects taxable
+value, which lags market rents and is struck on staggered reassessment cycles. The
+proxy is defensible and fully reproducible from public data, but the NOAH label is
+only as sharp as the proxy and the cutoff, which is why the sensitivity variants
+exist.
+
+### Parcel-scale environment
+
+Each environmental measure is extracted over the building footprint using the same
+rasters and the same canopy arithmetic as the areal pipeline, so a building's canopy
+percent and a block group's canopy percent differ only in the polygon, not the
+definition. An optional buffer extracts over a ring around the footprint to capture
+the building's immediate green context rather than only its roof and pavement.
+
+```{mermaid}
+flowchart TD
+  A["Building footprint"] --> B["Chesapeake 1 m<br/>-> canopy_pct"]
+  A --> C["Landsat summer median<br/>-> mean_lst, mean_ndvi"]
+  A --> D["FEMA NFHL overlay<br/>-> in_floodplain"]
+  B --> E["Typed building<br/>+ environment table"]
+  C --> E
+  D --> E
+```
+
+Flood exposure is a vector overlay of the FEMA National Flood Hazard Layer and
+activates only when that layer is supplied; until then the flood column is left empty
+rather than defaulted to "no flood risk".
+
+## Reading the housing-type dashboard
+
+Three views, all filterable by state, housing type, and environmental measure.
+
+- **Type map.** Every building as a point coloured by type. It answers where each
+  type of multifamily stock sits, and lets the eye pick out whether NOAH clusters
+  apart from market-rate.
+- **Type contrast.** The median of the chosen environmental measure for each type,
+  shown separately for Maryland and DC. The separation is deliberate — pooling the
+  two states hides that the type–environment relationship differs between them.
+- **Value and environment.** Value per unit against the environmental measure, with
+  the NOAH cutoff drawn as a horizontal line, so the affordability gradient and the
+  threshold's position are both visible at once.
+
+The headline value box reports the NOAH-minus-market-rate difference on the chosen
+measure. A positive canopy difference means NOAH buildings sit at higher canopy than
+market-rate; a positive temperature difference means they sit hotter.
+
+## What the contrast shows, and a caution
+
+The NOAH-versus-market difference is **not the same sign in the two jurisdictions**,
+which is the first thing the dashboard makes visible and the strongest argument
+against reading a single pooled number.
+
+| State | Type | Median canopy % | Median summer LST (°C) |
+|---|---|---|---|
+| DC | NOAH | 15.1 | 40.2 |
+| DC | Market-rate | 5.5 | 41.1 |
+| MD | NOAH | 20.9 | 40.7 |
+| MD | Market-rate | 21.9 | 40.1 |
+
+In DC, NOAH buildings sit at markedly higher canopy and lower summer surface
+temperature than market-rate multifamily. In Maryland the two are close to
+indistinguishable. The DC pattern is consistent with location: the District's
+low-value walk-up apartments, which the value proxy labels NOAH, sit more in leafier
+residential neighbourhoods, while market-rate multifamily concentrates in the dense,
+hot, low-canopy core. This is an interpretation, not a finding — the comparison
+conditions on nothing, and the same value proxy that defines NOAH is correlated with
+the neighbourhoods a building sits in. Read the contrast as a description of where
+these types are, and treat the cross-state reversal as a reason to model the two
+jurisdictions separately rather than pool them.
+
 ---
 
 *The complete documentation follows.*
