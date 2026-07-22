@@ -207,43 +207,90 @@ def _load_lihtc_points() -> gpd.GeoDataFrame:
 
 
 def _load_nhpd_points() -> gpd.GeoDataFrame:
-    """Active-subsidy NHPD property points for MD + DC from the national extract."""
+    """Active-subsidy NHPD property points for MD + DC, with program-type flags.
+
+    Carries which programs each property holds so the subsidy set can be split:
+    ``nhpd_is_lihtc`` marks NHPD records that are LIHTC (the overlap to dedupe
+    against the HUD LIHTC file), and ``nhpd_section8`` marks project-based
+    Section 8.
+    """
     if not NHPD_NATIONAL.exists():
-        logger.warning(
-            f"subsidy: no NHPD file at {NHPD_NATIONAL}; DC/MD 'unsubsidized' will "
-            "exclude LIHTC only and may overstate NOAH."
-        )
+        logger.warning(f"subsidy: no NHPD file at {NHPD_NATIONAL}; NHPD flags empty.")
         return gpd.GeoDataFrame(geometry=[], crs=CORRIDOR_CRS)
 
     df = pd.read_excel(NHPD_NATIONAL)
     df = df[df["State"].isin(["MD", "DC"])]
     active = df[df["PropertyStatus"] == NHPD_ACTIVE_STATUS].dropna(
         subset=["Latitude", "Longitude"]
-    )
-    by_state = active["State"].value_counts().to_dict()
-    logger.info(f"subsidy: {len(active):,} active NHPD points {by_state}")
-    return gpd.GeoDataFrame(
-        active[["State"]].rename(columns={"State": "nhpd_state"}),
+    ).copy()
+
+    n_lihtc = pd.to_numeric(active["NumberActiveLihtc"], errors="coerce").fillna(0)
+    n_s8 = pd.to_numeric(active["NumberActiveSection8"], errors="coerce").fillna(0)
+    out = gpd.GeoDataFrame(
+        {
+            "nhpd_is_lihtc": (n_lihtc > 0).to_numpy(),
+            "nhpd_section8": (n_s8 > 0).to_numpy(),
+        },
         geometry=gpd.points_from_xy(active["Longitude"], active["Latitude"]),
         crs="EPSG:4326",
     ).to_crs(CORRIDOR_CRS)
+    logger.info(
+        f"subsidy: {len(out):,} active NHPD points "
+        f"({int(out['nhpd_is_lihtc'].sum())} LIHTC, {int(out['nhpd_section8'].sum())} Section 8)"
+    )
+    return out
 
 
-def flag_subsidized(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Mark buildings whose footprint is within ``SUBSIDY_SNAP_M`` of a subsidy point."""
-    out = buildings.copy()
-    points = [_load_lihtc_points(), _load_nhpd_points()]
-    subsidy = pd.concat([p for p in points if len(p)], ignore_index=True)
-
+def _flag_near(buildings: gpd.GeoDataFrame, points: gpd.GeoDataFrame) -> pd.Series:
+    """Boolean per building: any point within ``SUBSIDY_SNAP_M`` of its footprint."""
+    if points.empty:
+        return pd.Series(False, index=buildings.index)
     near = gpd.sjoin_nearest(
-        out[["building_id", "geometry"]], subsidy[["geometry"]],
+        buildings[["building_id", "geometry"]], points[["geometry"]],
         how="left", max_distance=SUBSIDY_SNAP_M, distance_col="_d",
     )
     hit = set(near.loc[near["_d"].notna(), "building_id"])
-    out["subsidized"] = out["building_id"].isin(hit)
+    return buildings["building_id"].isin(hit)
+
+
+def flag_subsidized(buildings: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Attach the subsidy flags, kept as separate, non-double-counted measures.
+
+    Three flags, because the two programs have different data quality and the
+    analysis wants them apart:
+
+    * ``lihtc``            - within 30 m of a HUD LIHTC record. The trusted measure.
+    * ``nhpd_other``       - within 30 m of an active NHPD record that is *not* LIHTC
+                             (project-based Section 8, public housing, Section 202/236,
+                             etc.). NHPD's own LIHTC flag is used to remove the overlap,
+                             so a LIHTC-in-NHPD property is not counted twice.
+    * ``section8``         - within 30 m of an active project-based Section 8 property.
+    * ``subsidized``       - the operational subsidy flag for the NOAH split. Set to
+                             ``lihtc`` alone (LIHTC is the trusted program). NHPD adds
+                             coverage but its data quality is weaker, so it is kept as a
+                             separate ``subsidized_broad`` measure, not folded into the
+                             default.
+    * ``subsidized_broad`` - ``lihtc`` OR ``nhpd_other`` (the combined, deduped set).
+    """
+    out = buildings.copy()
+    lihtc = _load_lihtc_points()
+    nhpd = _load_nhpd_points()
+
+    out["lihtc"] = _flag_near(out, lihtc)
+    # Split NHPD by program so the LIHTC overlap is removed and Section 8 is isolated.
+    nhpd_non_lihtc = nhpd[~nhpd["nhpd_is_lihtc"]] if len(nhpd) else nhpd
+    nhpd_s8 = nhpd[nhpd["nhpd_section8"]] if len(nhpd) else nhpd
+    out["nhpd_other"] = _flag_near(out, nhpd_non_lihtc)
+    out["section8"] = _flag_near(out, nhpd_s8)
+
+    out["subsidized"] = out["lihtc"]  # default = LIHTC only (trusted measure)
+    out["subsidized_broad"] = out["lihtc"] | out["nhpd_other"]
+
     logger.info(
-        f"subsidy: {int(out['subsidized'].sum()):,}/{len(out):,} buildings within "
-        f"{SUBSIDY_SNAP_M:g} m of a LIHTC/NHPD point"
+        f"subsidy: LIHTC {int(out['lihtc'].sum()):,}; "
+        f"+NHPD(non-LIHTC) {int(out['nhpd_other'].sum()):,}; "
+        f"Section 8 {int(out['section8'].sum()):,}; "
+        f"broad (LIHTC+NHPD) {int(out['subsidized_broad'].sum()):,}"
     )
     return out
 

@@ -169,38 +169,49 @@ Residual guard: a building whose value/unit exceeds **$2,000,000** has its value
 and unit count on separate, non-contiguous parcels that did not merge; its unit
 count is untrustworthy, so it is typed `unknown`, not market-rate (104 buildings).
 
-## Subsidy flag (stage 2)
+## Subsidy flags (stage 2): two measures, deduplicated
 
-A building is `subsidized` if its footprint is within **30 m** of an active
-LIHTC or NHPD point:
+Subsidy is carried as separate measures, not one merged flag, because LIHTC and
+NHPD differ in data quality. A building is flagged if within **30 m** of a point.
 
-| Source | File | Filter |
+| Flag | Source | Count |
 |---|---|---|
-| HUD LIHTC (national) | `data/raw/lihtc.zip` | MD + DC, geocoded |
-| NHPD (national) | `data/external/National Housing Properties (1).xlsx` | MD + DC, `PropertyStatus = Active` |
+| `lihtc` (operational default) | HUD LIHTC `data/raw/lihtc.zip` | 595 |
+| `nhpd_other` | active NHPD, non-LIHTC only | 255 |
+| `section8` | active project-based Section 8 (from NHPD) | 246 |
+| `subsidized_broad` = lihtc OR nhpd_other | combined, deduped | 778 |
 
-NHPD is filtered to **active** subsidies: an expired NHPD property has lost its
-subsidy and is, if anything, NOAH again. Result: 865 subsidized buildings
-(MD 17.2% is a corrected figure — an earlier MD-only NHPD run understated DC).
+De-dup: of 1,606 active NHPD properties, 814 are LIHTC (NHPD's own flag); those are
+removed from `nhpd_other` so a property in both sources is counted once. Only active
+subsidies count. The operational `subsidized` (what excludes a building from NOAH) is
+`lihtc` alone — the trusted program — since a false positive there wrongly demotes an
+affordable building out of NOAH. NHPD file: `data/external/National Housing
+Properties (1).xlsx`, `PropertyStatus = Active`.
 
 ## NOAH vs market-rate (stage 3)
 
 Among unsubsidized, placeable buildings, `housing_type` splits on assessed value
 per unit at an **AMI-anchored cutoff** (`greengap.noah_threshold`): an affordable
 rent at a target AMI level → affordable market value via a gross rent multiplier
-(10×) → affordable *assessed* value via a per-state assessment ratio measured from
-the study's own multifamily sales (MD 0.75, DC 0.93). Three AMI levels are stored
-for sensitivity; 60% AMI (the LIHTC standard) is the default.
+(**8.5×, calibrated** to the corridor: observed value/unit ÷ annualized ACS BG rent,
+÷ assessment ratio, implies ~7.9× MD / ~9.2× DC) → affordable *assessed* value via a
+per-state assessment ratio measured from the study's own multifamily sales (MD 0.75,
+DC 0.93). Three AMI levels are stored; 60% AMI (the LIHTC standard) is the default.
 
 | Variant | AMI level | MD cutoff | DC cutoff |
 |---|---|---|---|
-| ami50 | 50% AMI | ~$123k | ~$153k |
-| ami60 (default) | 60% AMI | ~$148k | ~$184k |
-| ami80 | 80% AMI | ~$197k | ~$245k |
+| ami50 | 50% AMI | ~$105k | ~$130k |
+| ami60 (default) | 60% AMI | ~$125k | ~$156k |
+| ami80 | 80% AMI | ~$167k | ~$208k |
 
 Condominium and cooperative codes are excluded upstream (per-unit ownership, not
-rental stock). Final labels (ami60 default): **subsidized 865, NOAH 2,639,
-market-rate 1,512, unknown 348.**
+rental stock). Final labels (ami60 default, subsidized = LIHTC only): **subsidized
+595, NOAH 2,419, market-rate 1,988, unknown 362.**
+
+**Rent validation.** ACS block-group rent (B25063) corroborates the value proxy:
+value-defined NOAH buildings sit where a median 75% of renter units rent at or below
+the 60%-AMI line, vs 31% for market-rate. A block-group, not building-level, check
+(`greengap.rent`).
 
 ## Parcel-scale environment (`greengap.parcel_env`)
 

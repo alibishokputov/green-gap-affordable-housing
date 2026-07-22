@@ -61,9 +61,14 @@ AMI_LEVELS = {"ami50": 0.50, "ami60": 0.60, "ami80": 0.80}
 DEFAULT_AMI_LEVEL = "ami60"
 
 # Affordability rule and rent->value conversion.
-RENT_INCOME_SHARE = 0.30      # 30% of income to gross rent (standard affordability)
-GROSS_RENT_MULTIPLIER = 10.0  # market value / annual gross rent; ~9-11x for stabilised
-                              # multifamily. Sensitivity variants bracket this.
+RENT_INCOME_SHARE = 0.30  # 30% of income to gross rent (standard affordability)
+# Gross rent multiplier: market value / annual gross rent. Calibrated to the
+# corridor rather than assumed - the observed ratio of assessed value/unit to
+# annualized ACS block-group median rent, divided by the per-state assessment ratio,
+# implies a market GRM of ~7.9x (MD) and ~9.2x (DC). 8.5 is the corridor mid-point.
+# This is an approximation: the ACS rent is a block-group median across all rental
+# stock, not the multifamily-specific rent for the building.
+GROSS_RENT_MULTIPLIER = 8.5
 
 
 def ami_income(jurisdiction: str, state: str, level: float) -> float:

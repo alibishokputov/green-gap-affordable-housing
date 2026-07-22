@@ -65,7 +65,7 @@ HOUSING_APP_SRC = PROJ_ROOT / "app" / "housing_app.py"
 HOUSING_DATA = [
     PROJ_ROOT / "app" / "buildings_types.geojson",
     PROJ_ROOT / "app" / "bg_types.geojson",
-    PROJ_ROOT / "app" / "type_regression.json",
+    PROJ_ROOT / "app" / "type_stats.json",
 ]
 
 # Every module the app imports, plus their transitive deps: shinylive installs
