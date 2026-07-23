@@ -443,12 +443,12 @@ honest picture of where each housing type sits and how the scales relate, not an
 adjusted effect estimate. Five views, filterable by state, county (with an
 unselect-all control), housing type, and environmental measure:
 
-- **Type map.** A block-group choropleth of the chosen environmental measure, with
+- **Building map.** A block-group choropleth of the chosen environmental measure, with
   buildings as points colored by housing type on top. LIHTC buildings are drawn as a
   distinct diamond marker, and buildings whose footprint intersects the FEMA
   floodplain carry a dark-blue outline ring, so the subsidized and flood-exposed stock
-  are both visible against the rest. A low-to-high value legend keyed to the
-  choropleth's quantile breakpoints reads alongside the housing-type key.
+  are both visible against the rest. The sidebar carries a low-to-high value legend
+  keyed to the choropleth's quantile breakpoints alongside the housing-type key.
 - **Bivariate map (environment × LIHTC).** The areal view carried over from the first
   dashboard: block groups on a 3×3 grid crossing the environmental measure against
   LIHTC units, with a 3×3 legend showing the color for each environment-by-LIHTC
@@ -481,28 +481,83 @@ descriptive difference, not a correlation or an adjusted estimate.
 ## Correlating a categorical housing type with a continuous measure
 
 Housing type is categorical, so "the correlation between housing type and canopy" is
-not a single number. The Type correlations tab reports it in the two forms that are
-defined, one per scale.
+not a single quantity. The Type correlations tab reports it in the two forms that are
+defined, one per scale, and the methodology and its limits are worth stating in full
+because the numbers are easy to over-read.
 
-At the **building scale** the tab shows the **point-biserial correlation**: for each
-type, a binary indicator for "is this building of this type" is correlated with the
-environmental measure across all multifamily buildings. This is a Pearson correlation
-with a 0/1 variable, and it carries the sign of the between-type difference. A
-positive value means buildings of that type sit at higher values of the measure. The
-building point-biserial for NOAH and canopy, for instance, is positive, the same
-direction as the median contrast.
+### The two estimators
 
-At the **block-group scale** the tab shows the **Spearman correlation between the
-type's share of a block group's multifamily units and the block group's measure**.
-This is the ecological counterpart, two continuous quantities, and it answers a
-different question: across neighborhoods, does a higher concentration of this type go
-with higher or lower environmental values. The two scales can disagree in sign, which
-is the canopy paradox stated as a correlation rather than a comparison of means.
+At the **building scale** the measure is the **point-biserial correlation**. For a
+given type, a binary indicator (1 if the building is of that type, 0 otherwise) is
+correlated with the environmental measure across all multifamily buildings. The
+point-biserial coefficient is algebraically a Pearson correlation with a 0/1 variable,
+and it is monotonically related to the standardized difference in means between the
+two groups. It therefore carries the sign of the between-type contrast: a positive
+value means buildings of that type sit at higher values of the measure. NOAH and
+canopy, for example, correlate at +0.10 (n = 5,364), the same direction as the median
+contrast shown on the Type contrast tab.
 
-Both are unconditional associations. They condition on nothing, so a nonzero
-correlation reflects where each type sits, not an effect of the type. Significance
-stars (p &lt; 0.05) are shown, but with several thousand buildings even small
-correlations clear that bar, so the sign and magnitude matter more than the star.
+At the **block-group scale** the measure is the **Spearman rank correlation between
+the type's share of a block group's multifamily units and the block group's
+environmental value**. Both quantities are continuous, so this is an ordinary
+rank correlation rather than a point-biserial. It answers a different question:
+across neighborhoods, does a higher concentration of this type coincide with higher
+or lower environmental values. Spearman is used here (not Pearson) because the unit
+shares are bounded and skewed and the block-group environmental distributions are
+non-normal; the rank form is robust to both. Subsidized share and canopy correlate at
+−0.11 (n = 1,736 block groups that contain multifamily units).
+
+The two scales can disagree in sign. That is not an error; it is the canopy paradox
+expressed as a correlation rather than a comparison of means, and showing both is the
+point.
+
+### What is and is not identified
+
+Every coefficient in the tab is an **unconditional bivariate association**. It
+conditions on nothing. A nonzero correlation reflects where each housing type is
+located, not an effect of the housing type on its environment. The associations are
+consistent with siting decisions, historical disinvestment, land-market sorting,
+zoning, and post-development change, and the data cannot distinguish among these. The
+tab is a descriptive instrument for Stages 1 and 2 of the analysis (distributional and
+bivariate description); the conditional exposure difference the design targets, net of
+parcel and neighborhood characteristics, is a separate estimand that these
+correlations do not deliver.
+
+### Caveats
+
+- **Significance is uninformative at this sample size.** With roughly five thousand
+  buildings, a correlation of 0.03 clears p &lt; 0.05. The stars in the matrix mark
+  that threshold, but they should be ignored in favor of the sign and the magnitude.
+  A coefficient near zero is near zero whether or not it is starred.
+- **Multiple comparisons.** The matrix is 12 building-scale plus 12 block-group-scale
+  coefficients, 24 tests in all, and no correction is applied. Read the matrix as a
+  descriptive scan, not as 24 independent hypothesis tests; a single starred cell in
+  isolation is weak evidence.
+- **Group-size imbalance affects the point-biserial magnitude.** The point-biserial
+  is attenuated when the two groups are far from equal in size. The types are
+  unbalanced (NOAH 2,419, market-rate 1,988, subsidized 595), so the subsidized
+  coefficients in particular are pulled toward zero by the small share of subsidized
+  buildings, and their magnitude is not directly comparable to NOAH's. The sign
+  remains interpretable.
+- **Spatial dependence is not modeled.** Neither buildings nor block groups are
+  independent observations; nearby units share canopy, heat, and housing patterns, so
+  the effective sample size is smaller than the nominal n and the p-values are
+  optimistic. This is a reason to distrust the stars, not the point estimates, and it
+  is the same spatial-autocorrelation and MAUP concern that governs the areal analysis.
+- **The block-group correlation is ecological.** It describes neighborhoods, not
+  buildings, and cannot be read down to the individual building. Inferring a
+  building-level relationship from the block-group coefficient would be an ecological
+  fallacy, which is exactly the trap the two-scale presentation exists to prevent.
+- **Redundancy among the measures.** Tree canopy, NDVI, and summer temperature are
+  strongly intercorrelated, so the columns of the matrix are not independent readings;
+  a type that correlates positively with canopy will tend to correlate positively with
+  NDVI and negatively with temperature almost by construction.
+
+A related correlation appears elsewhere in the documentation and on the first
+dashboard: the block-group rank correlation between each environmental measure and
+LIHTC *units* (rather than a type's unit share). That figure and the Type correlations
+tab's LIHTC/subsidized row describe the same underlying pattern from slightly
+different angles and are consistent in sign.
 
 ## The canopy paradox: two scales, both correct
 

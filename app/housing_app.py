@@ -66,6 +66,14 @@ ENV_VARS = {
     "mean_ndvi": {"label": "NDVI (vegetation)", "worse": "low", "unit": ""},
 }
 ENV_LABELS = {k: v["label"] for k, v in ENV_VARS.items()}
+# Compact column headers for the correlation matrix. The two canopy measures must
+# stay distinguishable (the plain "(all)" split collapsed both to "Tree canopy %").
+ENV_SHORT = {
+    "canopy_pct": "Canopy % (all)",
+    "natural_canopy_pct": "Canopy % (natural)",
+    "mean_lst": "Summer temp",
+    "mean_ndvi": "NDVI",
+}
 
 RAMP_GREEN = ["#f7fcf5", "#c7e9c0", "#74c476", "#31a354", "#006d2c"]
 RAMP_HEAT = ["#fee5d9", "#fcae91", "#fb6a4a", "#de2d26", "#a50f15"]
@@ -302,7 +310,7 @@ app_ui = ui.page_sidebar(
         fill=False,
     ),
     ui.navset_card_tab(
-        ui.nav_panel("Type map", ui.output_ui("map")),
+        ui.nav_panel("Building map", ui.output_ui("map")),
         ui.nav_panel("Bivariate map (env × LIHTC)",
                      ui.output_ui("bivariate_map"),
                      ui.output_ui("greengap_caption"),
@@ -360,10 +368,19 @@ def server(input, output, session):
 
     @render.ui
     def legend():
-        # Show the legend that matches the active tab. The bivariate map's 3x3 key
-        # lives here rather than on the map so the map itself gets the full width.
-        if input.tab() == "Bivariate map (env × LIHTC)":
+        # Show the legend that matches the active tab, in the sidebar rather than on
+        # the map, so each map gets the full width. The building map adds a value ramp
+        # for its choropleth; the bivariate map shows its 3x3 key.
+        tab = input.tab()
+        if tab == "Bivariate map (env × LIHTC)":
             return ui.HTML(_bivariate_legend_html())
+        if tab == "Building map":
+            v = input.env_var()
+            bg = bg_view()
+            edges, colors = _quantile_bins(bg[v].to_numpy(dtype="float64"), _ramp_for(v))
+            ramp = (_ramp_legend_html(edges, colors, ENV_LABELS[v], ENV_VARS[v]["unit"])
+                    if edges.size else "")
+            return ui.HTML(ramp + _type_legend_html())
         return ui.HTML(_type_legend_html())
 
     # ---- value boxes ----
@@ -406,11 +423,7 @@ def server(input, output, session):
                        zoom_start=9, tiles="CartoDB positron")
 
         edges, colors = _quantile_bins(bg[v].to_numpy(dtype="float64"), _ramp_for(v))
-        ramp_legend = ""
         if edges.size:
-            ramp_legend = _ramp_legend_html(edges, colors, ENV_LABELS[v],
-                                            ENV_VARS[v]["unit"])
-
             def color_for(x):
                 if x is None or (isinstance(x, float) and np.isnan(x)):
                     return "#00000000"
@@ -470,10 +483,9 @@ def server(input, output, session):
 
         m.fit_bounds([[miny, minx], [maxy, maxx]])
         m.get_root().width = "100%"
-        m.get_root().height = "600px"
-        legend = (f'<div style="display:flex;gap:20px;align-items:flex-end;margin:4px 2px">'
-                  f'{ramp_legend}{_type_legend_html()}</div>')
-        return ui.HTML(legend + m.get_root()._repr_html_())
+        m.get_root().height = "620px"
+        # Legend (value ramp + housing-type key) lives in the sidebar, see legend().
+        return ui.HTML(m.get_root()._repr_html_())
 
     # ---- bivariate classification (env x LIHTC), shared by map + table ----
     @reactive.calc
@@ -625,7 +637,7 @@ def server(input, output, session):
 
         def matrix_html(scale, title, note):
             head = "".join(f'<th style="padding:4px 8px;font-size:11px;font-weight:600;'
-                           f'text-align:center">{ENV_LABELS[m].split(" (")[0]}</th>'
+                           f'text-align:center">{ENV_SHORT.get(m, ENV_LABELS[m])}</th>'
                            for m in measures)
             rows = ""
             for t in TYPE_ORDER:
