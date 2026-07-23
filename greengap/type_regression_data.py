@@ -23,14 +23,14 @@ app = typer.Typer(help=__doc__, no_args_is_help=True)
 
 APP_DIR = PROJ_ROOT / "app"
 
-# Point-layer columns the enhanced dashboard reads (building centroids). Flood is
-# omitted while the FEMA NFHL pull is only partial. lihtc/section8 drive the unique
-# marker shape for LIHTC on the type map.
+# Point-layer columns the enhanced dashboard reads (building centroids). lihtc/section8
+# drive the LIHTC diamond marker; in_floodplain marks buildings whose footprint
+# intersects the FEMA 1%-annual-chance floodplain (SFHA).
 POINT_COLS = [
     "building_id", "state", "jurisdiction", "housing_type",
     "units", "value_per_unit", "year_built",
     "canopy_pct", "natural_canopy_pct", "mean_lst", "mean_ndvi",
-    "lihtc", "section8",
+    "lihtc", "section8", "in_floodplain",
 ]
 
 
@@ -187,7 +187,7 @@ def export_stats() -> Path:
     bg = gpd.read_parquet(PROCESSED_DATA_DIR / "bg_analysis.parquet")
 
     payload = {"env_measures": ENV_MEASURES, "building_medians": {}, "bg_corr": {},
-               "paradox": {}, "rent_validation": {}}
+               "paradox": {}, "rent_validation": {}, "flood_share": {}}
 
     # Building-level: median environment by housing type, per measure.
     for m in ENV_MEASURES:
@@ -221,6 +221,18 @@ def export_stats() -> Path:
             t: round(float(v), 1) if pd.notna(v) else None
             for t, v in b.groupby("housing_type", observed=True)["affordable_rent_share"]
             .median().items()
+        }
+
+    # Flood exposure: share of each housing type whose footprint intersects the FEMA
+    # 1%-annual-chance floodplain (SFHA). A coarse binary flag; counts thin out by type.
+    if "in_floodplain" in b.columns:
+        fl = b.dropna(subset=["in_floodplain"])
+        payload["flood_share"] = {
+            "overall": round(float(fl["in_floodplain"].mean()) * 100, 1),
+            "by_type": {
+                t: {"pct": round(float(v.mean()) * 100, 1), "n": int(v.sum())}
+                for t, v in fl.groupby("housing_type", observed=True)["in_floodplain"]
+            },
         }
 
     out = APP_DIR / "type_stats.json"

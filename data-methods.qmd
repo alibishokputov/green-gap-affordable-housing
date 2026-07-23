@@ -167,7 +167,7 @@ therefore the apartment stock, not every unit that happens to be rented.
 | Subsidized housing | HUD LIHTC (LIHTCPUB); NHPD national extract | point | Current inventory | `housing_type = subsidized` |
 | Tree canopy and land cover | Chesapeake Bay LULC, 2022 Edition | 1 m | ~2017 (DC), ~2018 (MD) | `canopy_pct`, `natural_canopy_pct` |
 | Surface temperature and indices | Landsat 8 and 9, Collection 2 Level-2 | 30 m (LST ~100 m effective) | Summer 2021 to 2023 | `mean_lst`, `mean_ndvi` |
-| Flood exposure | FEMA National Flood Hazard Layer | polygon | current NFHL | `in_floodplain` (activates when the layer is supplied) |
+| Flood exposure | FEMA National Flood Hazard Layer (SFHA) | polygon | NFHL, county effective dates 2006–2024 | `in_floodplain` |
 
 ## Unit of analysis: the building
 
@@ -387,10 +387,13 @@ metres (NAD83 Maryland State Plane, EPSG:26985).
 ```{mermaid}
 flowchart TD
   A["Building footprint<br/>(median ~2,675 m²)"] --> B["exactextract<br/>area-weighted overlap"]
+  A --> F["FEMA SFHA overlay<br/>(polygon intersection)"]
   B --> C["Chesapeake 1 m land cover<br/>-> canopy_pct, natural_canopy_pct"]
   B --> D["Landsat summer median 30 m<br/>-> mean_lst, mean_ndvi"]
   C --> E["Building environment table<br/>keyed on building_id"]
   D --> E
+  F --> G["in_floodplain<br/>(1% floodplain, binary)"]
+  G --> E
 ```
 
 **Optional buffer.** A ring can be added around the footprint with `--buffer N`
@@ -413,10 +416,22 @@ The dashboard renders each building as a point at its centroid rather than as it
 footprint polygon. The extraction is polygon-based and area-weighted; only the map
 marker is a point, to keep the browser payload small.
 
-A FEMA National Flood Hazard Layer overlay is coded (Special Flood Hazard Area
-intersection) but not yet in the dashboard: the current NFHL pull is partial, so a
-flood flag would undercount exposure. It is deferred until a complete flood layer is
-loaded rather than shipped as an incomplete variable.
+**Flood exposure.** Each building carries `in_floodplain`, a binary flag set when its
+footprint intersects the FEMA 1%-annual-chance floodplain (the Special Flood Hazard
+Area, SFHA). The SFHA polygons come from FEMA's National Flood Hazard Layer, filtered
+to the high-risk zones (A, AE, AH, AO, AR, A99, V, VE); the corridor holds 4,421 such
+polygons and the overlay is a vector intersection of the footprint against them, not
+a raster extraction. About 5% of multifamily buildings intersect the floodplain.
+
+Three caveats belong with this variable. It is a coarse in-or-out flag on the
+footprint: it records intersection with the 1% floodplain, not depth, base flood
+elevation, or the share of the parcel exposed, so it should be read as "sits in the
+mapped floodplain," not as a flood-risk score. The NFHL is effective-dated by county,
+and across the study jurisdictions those dates span 2006 to 2024, so the flag inherits
+a mix of map vintages that a comparison should acknowledge. And the flagged buildings
+are few once split by housing type and state (on the order of 100 per type), so
+type-by-type flood contrasts have little power and are reported as descriptive shares
+rather than tested differences.
 
 ## Reading the housing-type dashboard
 
@@ -430,9 +445,10 @@ unselect-all control), housing type, and environmental measure:
 
 - **Type map.** A block-group choropleth of the chosen environmental measure, with
   buildings as points colored by housing type on top. LIHTC buildings are drawn as a
-  distinct diamond marker so the subsidized stock is visible against the rest. A
-  low-to-high value legend keyed to the choropleth's quantile breakpoints reads
-  alongside the housing-type key.
+  distinct diamond marker, and buildings whose footprint intersects the FEMA
+  floodplain carry a dark-blue outline ring, so the subsidized and flood-exposed stock
+  are both visible against the rest. A low-to-high value legend keyed to the
+  choropleth's quantile breakpoints reads alongside the housing-type key.
 - **Bivariate map (environment × LIHTC).** The areal view carried over from the first
   dashboard: block groups on a 3×3 grid crossing the environmental measure against
   LIHTC units, with a 3×3 legend showing the color for each environment-by-LIHTC

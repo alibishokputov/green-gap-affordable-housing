@@ -127,7 +127,7 @@ def _load_points() -> gpd.GeoDataFrame:
     for c in ("units", "value_per_unit", "canopy_pct", "natural_canopy_pct",
               "mean_lst", "mean_ndvi", "year_built"):
         gdf[c] = gdf[c].astype("float64")
-    for c in ("lihtc", "section8"):
+    for c in ("lihtc", "section8", "in_floodplain"):
         if c in gdf.columns:
             gdf[c] = gdf[c].astype("boolean").fillna(False)
     return gdf
@@ -201,6 +201,10 @@ def _type_legend_html() -> str:
         '<span style="width:11px;height:11px;background:#0072B2;display:inline-block;'
         'margin-right:6px;transform:rotate(45deg)"></span>'
         '<span style="font-size:12px">LIHTC building (diamond)</span></div>'
+        '<div style="display:flex;align-items:center;margin:2px 0">'
+        '<span style="width:11px;height:11px;border-radius:50%;background:#bbb;'
+        'border:2px solid #08306b;display:inline-block;margin-right:6px"></span>'
+        '<span style="font-size:12px">In FEMA floodplain (blue ring)</span></div>'
     )
     return f'<div style="padding:6px 2px"><b style="font-size:12px">Housing type</b>{items}</div>'
 
@@ -307,7 +311,7 @@ app_ui = ui.page_sidebar(
         ui.nav_panel("Value × environment", ui.output_ui("scatter")),
         ui.nav_panel("Canopy paradox", ui.output_ui("paradox")),
     ),
-    title="Housing type × environment — multifamily rental (MD + DC)",
+    title="Housing type × environment: multifamily rental (MD + DC)",
     fillable=True,
 )
 
@@ -418,18 +422,27 @@ def server(input, output, session):
                     aliases=["County", ENV_LABELS[v], *d_aliases]),
             ).add_to(m)
 
-        # Non-LIHTC points as one GeoJson circle layer (light).
+        # Non-LIHTC points as one GeoJson circle layer (light). Buildings whose
+        # footprint intersects the FEMA 1% floodplain get a dark-blue outline ring.
         lihtc_col = "lihtc" if "lihtc" in g.columns else None
         non = g[~g[lihtc_col]] if lihtc_col else g
-        show = non[["housing_type", "jurisdiction", "units", v, "geometry"]].copy()
+        flood_col = "in_floodplain" if "in_floodplain" in non.columns else None
+        cols = ["housing_type", "jurisdiction", "units", v, "geometry"]
+        if flood_col:
+            cols.insert(-1, flood_col)
+        show = non[cols].copy()
         show[v] = show[v].round(1)
         show["type_label"] = show["housing_type"].map(TYPE_LABELS)
         show["_c"] = show["housing_type"].map(TYPE_COLORS).fillna("#999")
+        show["_flood"] = show[flood_col].astype(bool) if flood_col else False
         folium.GeoJson(
             show.to_json(),
             marker=folium.CircleMarker(radius=2.5, fill=True, fill_opacity=0.8, weight=0.3),
-            style_function=lambda f: {"color": "#333", "weight": 0.3,
-                                      "fillColor": f["properties"]["_c"]},
+            style_function=lambda f: {
+                "color": "#08306b" if f["properties"]["_flood"] else "#333",
+                "weight": 1.6 if f["properties"]["_flood"] else 0.3,
+                "fillColor": f["properties"]["_c"],
+            },
             tooltip=folium.GeoJsonTooltip(fields=["type_label", "jurisdiction", "units", v],
                                           aliases=["Type", "Jurisdiction", "Units", ENV_LABELS[v]]),
         ).add_to(m)
@@ -631,7 +644,7 @@ def server(input, output, session):
         rv = STATS.get("rent_validation", {})
         bm = STATS["building_medians"]["canopy_pct"]
         html = ['<div style="padding:14px 10px;font-family:system-ui;max-width:760px">']
-        html.append('<h4 style="margin:0 0 6px">Why the two scales disagree — and both are right</h4>')
+        html.append('<h4 style="margin:0 0 6px">Why the two scales disagree, and both are right</h4>')
         html.append(
             '<p style="font-size:13px;color:#333">At the <b>building</b> scale, affordable '
             f'buildings are greener than market-rate: LIHTC/subsidized median canopy '
@@ -642,7 +655,7 @@ def server(input, output, session):
         html.append(
             '<p style="font-size:13px;color:#333">The reconciliation is siting. LIHTC '
             f'concentrates in denser, more urban block groups that are lower-canopy '
-            f'overall — block groups <b>with</b> LIHTC average <b>{p["bg_canopy_with_lihtc"]}%</b> '
+            f'overall. Block groups <b>with</b> LIHTC average <b>{p["bg_canopy_with_lihtc"]}%</b> '
             f'canopy, those <b>without</b> average <b>{p["bg_canopy_without_lihtc"]}%</b>. So '
             'across neighborhoods, more LIHTC tracks less canopy; but <i>within</i> those '
             'neighborhoods, the affordable building itself is not the least-green parcel. '
@@ -675,8 +688,22 @@ def server(input, output, session):
                 'NOAH label.</b> The NOAH label is set from assessed value, but observed '
                 'rents agree: NOAH buildings sit in block groups where a median '
                 f'<b>{rv.get("noah")}%</b> of renter units rent at or below the 60%-AMI '
-                f'line, vs <b>{rv.get("market_rate")}%</b> for market-rate — evidence the '
+                f'line, vs <b>{rv.get("market_rate")}%</b> for market-rate, evidence the '
                 'value cutoff is picking out genuinely affordable-rent locations.</p>')
+        fs = STATS.get("flood_share", {})
+        if fs.get("by_type"):
+            bt = fs["by_type"]
+            parts = ", ".join(
+                f'{TYPE_LABELS[t].split(" (")[0]} {bt[t]["pct"]}% (n={bt[t]["n"]})'
+                for t in TYPE_ORDER if t in bt)
+            html.append(
+                '<p style="font-size:13px;color:#333;margin-top:10px"><b>Flood exposure.'
+                f'</b> {fs.get("overall")}% of multifamily buildings have a footprint '
+                'intersecting the FEMA 1%-annual-chance floodplain (SFHA): '
+                f'{parts}. The differences are small and the counts are thin, so this is '
+                'a descriptive flag, not a disparity. The flood maps are effective-dated '
+                'by county (2006 to 2024 across the corridor), a vintage caveat to '
+                'carry into any comparison.</p>')
         html.append('</div>')
         return ui.HTML("".join(html))
 
