@@ -4,7 +4,7 @@ Draft documentation for the data section of the paper. It records the provenance
 processing, and construction of every variable currently used in the analysis and
 the interactive dashboard, together with the measurement decisions and limitations
 that bear on interpretation. The scope here is the two jurisdictions assembled so
-far — Maryland and Washington, DC — and one housing type, Low-Income Housing Tax
+far, Maryland and Washington, DC, and one housing type, Low-Income Housing Tax
 Credit (LIHTC) properties. The eventual design spans a six-jurisdiction corridor
 and additional housing types (market-rate, naturally occurring affordable housing,
 other assisted units); those are not yet in the data and are noted where their
@@ -26,8 +26,8 @@ from the 2022 TIGER/Line shapefiles.
 
 Two geographies are carried in parallel:
 
-- **Census block group** (the default unit; 4,650 units — 4,079 in MD, 571 in DC).
-- **Census tract** (1,681 units — 1,475 in MD, 206 in DC), retained as a coarser
+- **Census block group** (the default unit; 4,650 units: 4,079 in MD, 571 in DC).
+- **Census tract** (1,681 units: 1,475 in MD, 206 in DC), retained as a coarser
   scale for sensitivity checks.
 
 The block group is the finest standard Census geography that still carries American
@@ -91,7 +91,7 @@ Counting canopy that overhangs buildings, parking, and roads follows standard ur
 tree canopy practice and matters for the substantive question. Restricting canopy to
 class 3 alone excludes exactly the street-tree and yard-tree canopy that is most
 common in dense, built-up areas, and doing so lowers measured canopy in urban
-block groups by a factor of roughly two to three — the same areas where LIHTC
+block groups by a factor of roughly two to three, the same areas where LIHTC
 concentrates. Because the definition is consequential, a natural-canopy alternative
 (class 3 only) is retained and can be selected in the dashboard so the analysis can
 report sensitivity to the choice rather than depend on it.
@@ -105,9 +105,9 @@ each unit the extraction returns the fraction of area in each of the 12 classes.
 
 **Canopy percentage and its denominator.** Two canopy percentages are constructed:
 
-- `canopy_pct` — canopy as a share of **classified land**, with both water (class 1)
+- `canopy_pct`, canopy as a share of **classified land**, with both water (class 1)
   and unclassified (nodata) area removed from the denominator.
-- `canopy_pct_total` — canopy as a share of all classified area, water included.
+- `canopy_pct_total`, canopy as a share of all classified area, water included.
 
 `canopy_pct` is the primary measure. A block group that is half open water should
 not read as half as green as an otherwise identical inland block group, so water is
@@ -167,12 +167,12 @@ composite would bias the result.
 
 The five environmental bands are:
 
-- **Land surface temperature (LST, °C)** — from the thermal band `ST_B10`.
-- **NDVI** — (NIR − Red) / (NIR + Red), a vegetation greenness index.
-- **NDBI** — (SWIR1 − NIR) / (SWIR1 + NIR), a built-up / impervious index.
-- **NDWI** — (Green − NIR) / (Green + NIR), a water index used mainly for quality
+- **Land surface temperature (LST, °C)**, from the thermal band `ST_B10`.
+- **NDVI**, (NIR − Red) / (NIR + Red), a vegetation greenness index.
+- **NDBI**, (SWIR1 − NIR) / (SWIR1 + NIR), a built-up / impervious index.
+- **NDWI**, (Green − NIR) / (Green + NIR), a water index used mainly for quality
   screening.
-- **Albedo** — broadband shortwave albedo from the Liang (2001) narrowband-to-
+- **Albedo**, broadband shortwave albedo from the Liang (2001) narrowband-to-
   broadband coefficients:
   `0.356·blue + 0.130·red + 0.373·nir + 0.085·swir1 + 0.072·swir2 − 0.0018`.
 
@@ -300,7 +300,7 @@ zero place both cut points at zero, which collapses the LIHTC axis to two classe
 empties the high-LIHTC cell. Natural breaks avoids this; the tool warns when a chosen
 scheme degenerates.
 
-The bivariate map's corner cell marks co-location — the units where the most LIHTC
+The bivariate map's corner cell marks co-location: the units where the most LIHTC
 coincides with the worst environmental value (lowest canopy, or highest temperature).
 The corner is defined by each variable's polarity and moves accordingly. It is a
 descriptive display of overlap. Absent a comparison housing group it does not measure
@@ -354,8 +354,8 @@ and no covariates. Reported relationships are unconditional associations across 
 units. LIHTC location tracks urban location, and urban land is hot and less green, so
 the associations partly restate that geography. They are descriptive, they motivate
 the question, and they do not establish a disparity or a mechanism. The estimand the
-design ultimately targets — a difference in environmental exposure across housing
-types after conditioning on parcel, neighborhood, and jurisdiction characteristics —
+design ultimately targets, a difference in environmental exposure across housing
+types after conditioning on parcel, neighborhood, and jurisdiction characteristics,
 requires a market-rate (and other-assisted) comparison group and a set of controls
 that are not yet assembled.
 

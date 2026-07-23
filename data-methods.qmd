@@ -121,9 +121,9 @@ The bivariate dashboard above shows where LIHTC affordable housing and environme
 conditions co-locate across census units. It cannot compare affordable housing to
 anything, because the areal data carry no other housing group. A second, parcel-scale
 dashboard adds that comparison. It works at the **building** scale and sorts
-multifamily rental stock into three types — subsidized, NOAH, and market-rate — then
-contrasts them on the canopy, summer heat, and flood exposure measured at each
-building's own footprint.
+multifamily rental stock into three types (subsidized, NOAH, and market-rate), then
+contrasts them on the canopy and summer heat measured at each building's own
+footprint.
 
 Everything here remains cross-sectional and descriptive. A difference between NOAH
 and market-rate buildings reflects where the two types sit, not an effect of the
@@ -144,7 +144,7 @@ reader should be able to see and contest.
 | **Market-rate** | Unsubsidized, assessed value/unit above the cutoff | 1,988 |
 | **Unknown** | Unsubsidized, no trustworthy unit count | 362 |
 
-NOAH — naturally occurring affordable housing — is the policy-relevant category:
+NOAH, naturally occurring affordable housing, is the policy-relevant category:
 unsubsidized stock that rents affordably without a program and can be lost to the
 market at any time. It has no subsidy record, so it is inferred from an affordability
 threshold on the assessor's **value per unit**, anchored to Area Median Income (see
@@ -154,9 +154,9 @@ below), using public data only.
 Condominium and cooperative parcels are excluded: they are owner-occupied tenure,
 recorded one parcel per unit rather than per building, so their per-unit values
 would not be comparable and would swamp the apartment stock by count. One
-consequence to state plainly — investor-owned condominium units that are in fact
-rented out are missed, because the assessor data cannot distinguish an owner-occupied
-condo from a rented one without an ownership-occupancy join. The rental universe is
+consequence should be stated plainly. Investor-owned condominium units that are in
+fact rented out are missed, because the assessor data cannot distinguish an
+owner-occupied condo from a rented one without an ownership-occupancy join. The rental universe is
 therefore the apartment stock, not every unit that happens to be rented.
 
 ## Housing-type data streams
@@ -229,16 +229,16 @@ A building is subsidized if its footprint sits within 30 m of an active subsidy
 record. The two subsidy programs have different data quality, so they are carried as
 **separate measures** rather than merged into one:
 
-- **`lihtc`** — near a HUD LIHTC record. LIHTC is the trusted program and is the
+- **`lihtc`**, near a HUD LIHTC record. LIHTC is the trusted program and is the
   **operational subsidy flag**: it is what removes a building from the NOAH/market
   split. 595 buildings.
-- **`nhpd_other`** — near an active NHPD record that is *not* LIHTC. NHPD adds
+- **`nhpd_other`**, near an active NHPD record that is *not* LIHTC. NHPD adds
   coverage (project-based Section 8, public housing, Section 202/236, and others),
   but its data quality is weaker, so it is kept as a separate measure and not folded
   into the default. 255 buildings.
-- **`subsidized_broad`** = `lihtc` OR `nhpd_other` — the combined set, available for
+- **`subsidized_broad`**, the combined `lihtc` OR `nhpd_other` set, available for
   a sensitivity check. 778 buildings.
-- **`section8`** — near an active project-based Section 8 property. Reported as its
+- **`section8`**, near an active project-based Section 8 property. Reported as its
   own flag. 246 buildings.
 
 The de-duplication matters and is explicit. NHPD carries its own LIHTC flag; of the
@@ -253,7 +253,7 @@ has lost it and belongs back in the unsubsidized pool.
 flowchart TD
   A["HUD LIHTC<br/>MD + DC points"] --> L["lihtc flag<br/>(operational default)"]
   B["NHPD active, MD + DC"] --> D{"NHPD record<br/>is LIHTC?"}
-  D -->|yes| X["drop (already in LIHTC)<br/>— no double count"]
+  D -->|yes| X["drop (already in LIHTC),<br/>no double count"]
   D -->|no| N["nhpd_other flag"]
   L --> S["subsidized = lihtc"]
   L --> BR["subsidized_broad = lihtc OR nhpd_other"]
@@ -271,8 +271,8 @@ that choice is visible, not hidden.
 
 Among unsubsidized buildings, an affordability cutoff on assessed value per unit
 separates NOAH from market-rate. The cutoff is not an arbitrary quantile of the
-value distribution; it is anchored to an explicit affordability standard — a
-household at a target Area Median Income (AMI) level — and every step of the
+value distribution; it is anchored to an explicit affordability standard, a
+household at a target Area Median Income (AMI) level, and every step of the
 translation from that standard to a dollar figure is either sourced or measured.
 
 ```{mermaid}
@@ -289,7 +289,7 @@ flowchart TD
 The chain, step by step:
 
 1. **Affordable rent.** HUD's FY2024 Section 8 income limits give the 80% AMI (Low
-   Income) limit for a 3-person household — a reference for a 2-bedroom unit. Lower
+   Income) limit for a 3-person household, a reference for a 2-bedroom unit. Lower
    AMI levels scale that limit. At 30% of income to rent, this fixes an affordable
    monthly rent (\$1,651/mo in the Maryland metros at 60% AMI).
 2. **Rent to market value.** A gross rent multiplier converts affordable annual
@@ -297,18 +297,18 @@ The chain, step by step:
    it is **calibrated to the corridor**: the observed ratio of assessed value per
    unit to annualized ACS block-group median rent, divided by the per-state
    assessment ratio (step 3), implies a market GRM of ~7.9× in Maryland and ~9.2× in
-   DC. The pipeline uses **8.5×**, the corridor mid-point. This is an approximation —
+   DC. The pipeline uses **8.5×**, the corridor mid-point. This is an approximation.
    ACS block-group median rent is a neighborhood rent across all rental stock, not
-   the multifamily-specific rent of the building — and it is documented as such.
+   the multifamily-specific rent of the building, and it is documented as such.
 3. **Market to assessed value.** The parcels carry *assessed* value, which sits
-   below market in both jurisdictions. The **assessment ratio** — assessed over
-   sale price — is estimated directly from arms-length multifamily sales in the
+   below market in both jurisdictions. The **assessment ratio** (assessed over
+   sale price) is estimated directly from arms-length multifamily sales in the
    study parcels themselves (median 0.75 in Maryland from 1,586 sales, 0.93 in DC
    from 935), not borrowed from a statewide figure. Multiplying by it puts the
    cutoff on the same footing as the assessed values the buildings carry.
 
 The AMI level is the one substantive lever, and three are stored so the label's
-sensitivity is visible. **60% AMI is the default** — it is the income level LIHTC
+sensitivity is visible. **60% AMI is the default**, the income level LIHTC
 units are targeted to, so NOAH is drawn at the same affordability line the
 subsidized stock serves.
 
@@ -320,12 +320,12 @@ subsidized stock serves.
 
 This replaces an earlier per-state quantile cutoff, which drew the NOAH line at a
 fixed fraction of each state's own value distribution. The quantile was
-reproducible but arbitrary — "the cheapest 40%" is not an affordability standard —
+reproducible but arbitrary ("the cheapest 40%" is not an affordability standard),
 and made NOAH mean something different in each state. The AMI-anchored cutoff is an
 absolute, interpretable threshold: a NOAH building is one whose assessed value is
 consistent with rents affordable at or below the target AMI. Assessed value remains
 a proxy for rent (it lags market and is struck on staggered reassessment cycles),
-so the label is only as sharp as the proxy and the GRM — which is why the AMI
+so the label is only as sharp as the proxy and the GRM. That is why the AMI
 variants and the measured assessment ratio are both carried explicitly.
 
 ### Does the value proxy actually track rent? A validation
@@ -348,10 +348,10 @@ affordable. They do, clearly:
 NOAH buildings sit in block groups where three-quarters of units rent affordably;
 market-rate buildings sit where fewer than a third do. The value cutoff is picking
 out genuinely affordable-rent locations, which is real corroboration that the proxy
-is doing its intended job. Two honest caveats: this is a *block-group* rent, not the
-building's own rent — it validates location, not the individual unit — and ACS gross
-rent is contract rent for occupied units, which is not the asking rent a newly
-listed unit would command. A building-level rent measure still requires listing data
+is doing its intended job. Two honest caveats apply. This is a *block-group* rent,
+not the building's own rent, so it validates location rather than the individual
+unit. And ACS gross rent is contract rent for occupied units, which is not the
+asking rent a newly listed unit would command. A building-level rent measure still requires listing data
 (see `references/rent-based-noah-design.md`).
 
 ### Parcel-scale environment
@@ -377,7 +377,7 @@ loaded rather than shipped as an incomplete variable.
 
 ## Reading the housing-type dashboard
 
-The dashboard reports **descriptive associations only** — medians, spatial
+The dashboard reports **descriptive associations only**: medians, spatial
 co-location, and correlations, no fitted model. Each building also carries ACS
 block-group covariates (income, poverty, education, race/ethnicity, density) as
 descriptors, but they are not entered into a regression here; the intent is an
@@ -391,7 +391,7 @@ unselect-all control), housing type, and environmental measure:
 - **Bivariate map (environment × LIHTC).** The areal view carried over from the first
   dashboard: block groups on a 3×3 grid crossing the environmental measure against
   LIHTC units. Block groups in the worst-environment tertile *and* the top LIHTC
-  tertile — the "green-gap" co-location corner — are outlined in **red** and listed
+  tertile, the "green-gap" co-location corner, are outlined in **red** and listed
   in a table below the map. This is spatial co-location, not evidence that LIHTC
   housing is treated worse.
 - **Type contrast.** The median environmental measure for each type, Maryland and DC
@@ -402,7 +402,7 @@ unselect-all control), housing type, and environmental measure:
   side by side and reconciled (below).
 
 The headline value box reports the raw **difference in medians** between NOAH and
-market-rate — a positive canopy value means NOAH sits at higher canopy. It is a
+market-rate; a positive canopy value means NOAH sits at higher canopy. It is a
 descriptive difference, not a correlation or an adjusted estimate.
 
 ## The canopy paradox: two scales, both correct
@@ -419,7 +419,7 @@ market-rate. The affordable stock is not the least-green multifamily.
 units (Spearman −0.16, n≈4,600). More LIHTC in a block group goes with less canopy.
 
 **The reconciliation is siting.** LIHTC concentrates in denser, more urban block
-groups that are lower-canopy overall — block groups with any LIHTC average 31% canopy,
+groups that are lower-canopy overall. Block groups with any LIHTC average 31% canopy,
 those with none average 38%. So *across* neighborhoods, more affordable housing tracks
 less canopy (a statement about which neighborhoods get LIHTC). But *within* those
 neighborhoods, the affordable building's own parcel is not the least-green one (a
@@ -430,10 +430,10 @@ collapsing either into "affordable housing is greener/less green" would mislead.
 Both statements matter for the study, and they say different things:
 
 - The negative block-group correlation says **affordable housing is concentrated in
-  the less-green parts of the region** — an environmental-justice observation about
+  the less-green parts of the region**, an environmental-justice observation about
   where affordable housing is built.
 - The positive building comparison says **among multifamily, the affordable buildings
-  are not themselves the least-green** — a within-neighborhood observation.
+  are not themselves the least-green**, a within-neighborhood observation.
 
 Among block groups that *have* LIHTC, the correlation nearly vanishes (−0.04), which
 confirms the negative signal is almost entirely between-neighborhood sorting, not a
