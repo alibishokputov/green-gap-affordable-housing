@@ -78,13 +78,28 @@ def export_points() -> Path:
     return out
 
 
+# Block-group demographic and rent context surfaced on the map (tooltips + green-gap
+# table). Already pulled per block group by greengap.acs / greengap.rent; joined here
+# by GEOID at export time so the areal bg_analysis table stays untouched.
+BG_DEMOG_COLS = [
+    "median_income", "poverty_rate", "pct_bachelors_plus",
+    "pct_white_nh", "pct_black_nh", "pct_hispanic",
+]
+BG_RENT_COLS = ["median_gross_rent", "affordable_rent_share"]
+
+
 def export_bg_choropleth() -> Path:
-    """Write a block-group GeoJSON: environmental measures + units by housing type.
+    """Write a block-group GeoJSON: environmental measures, units by housing type, and
+    census demographic/economic context.
 
     The environmental backdrop and geometry come from the areal analysis table
-    (``bg_analysis.parquet``); the per-type unit counts are aggregated from the
-    labeled buildings. This is the choropleth-with-type-layers tab's data.
+    (``bg_analysis.parquet``); per-type unit counts are aggregated from the labeled
+    buildings; ACS demographics and rent are joined by GEOID from the cached
+    ``acs_bg`` / ``rent_bg`` tables. This is the block-group map's data.
     """
+    from greengap.acs import acs_bg_path
+    from greengap.rent import rent_bg_path
+
     b = load_regression_frame()
     counts = (
         b.dropna(subset=["GEOID"])
@@ -101,11 +116,32 @@ def export_bg_choropleth() -> Path:
             "lihtc_projects", "geometry"]
     bg = bg[[c for c in keep if c in bg.columns]].copy()
     bg = bg.merge(counts, on="GEOID", how="left")
+
+    # Join ACS demographics and block-group rent by GEOID. Warn (do not fail) if a
+    # source is missing, matching load_regression_frame's handling of rent.
+    for path, cols, name in (
+        (acs_bg_path(), BG_DEMOG_COLS, "acs_bg"),
+        (rent_bg_path(), BG_RENT_COLS, "rent_bg"),
+    ):
+        if path.exists():
+            src = pd.read_parquet(path)
+            bg = bg.merge(src[["GEOID", *[c for c in cols if c in src.columns]]],
+                          on="GEOID", how="left")
+        else:
+            logger.warning(f"export_bg_choropleth: {name} missing ({path}); "
+                           "demographics/rent omitted from the block-group map")
+
     for c in [c for c in bg.columns if c.startswith("units_")]:
         bg[c] = bg[c].fillna(0).astype(int)
-    for c in ("canopy_pct", "natural_canopy_pct", "mean_lst", "mean_ndvi"):
+    round_cols = ["canopy_pct", "natural_canopy_pct", "mean_lst", "mean_ndvi",
+                  "poverty_rate", "pct_bachelors_plus", "pct_white_nh",
+                  "pct_black_nh", "pct_hispanic", "affordable_rent_share"]
+    for c in round_cols:
         if c in bg.columns:
-            bg[c] = bg[c].astype(float).round(2)
+            bg[c] = bg[c].astype(float).round(1)
+    for c in ("median_income", "median_gross_rent"):
+        if c in bg.columns:
+            bg[c] = bg[c].round(0)
 
     # Simplify for a lighter WASM payload (display only), matching the areal build.
     bg["geometry"] = bg.geometry.simplify(0.0003, preserve_topology=True)

@@ -356,19 +356,62 @@ asking rent a newly listed unit would command. A building-level rent measure sti
 
 ### Parcel-scale environment
 
-Each environmental measure is extracted over the building footprint using the same
-rasters and the same canopy arithmetic as the areal pipeline, so a building's canopy
-percent and a block group's canopy percent differ only in the polygon, not the
-definition. An optional buffer extracts over a ring around the footprint to capture
-the building's immediate green context rather than only its roof and pavement.
+The environmental measures are extracted for each building over the building's own
+footprint, at the same definitions the areal pipeline uses for census units. The
+building and the block group share the extractor, the rasters, and the canopy
+arithmetic, so a building's canopy percent and a block group's canopy percent differ
+only in the polygon supplied, not in how the number is computed.
+
+**Area-weighted extraction, not centroid sampling.** Each footprint is intersected
+with the raster using `exactextract`, which computes the exact polygon-by-pixel
+overlap and weights every partially covered boundary pixel by its covered area. A
+building is not represented by the single pixel under its centroid; it is the
+area-weighted composite of every pixel its footprint touches. The median footprint is
+about 2,675 m², large enough that a 1 m canopy raster and a 30 m thermal raster both
+resolve it stably. The same extractor and the same `["unique", "frac"]` land-cover
+call drive the areal canopy step, so the two scales are not just conceptually but
+mechanically identical.
+
+**Canopy arithmetic (shared with the areal pipeline).** The per-class area fractions
+feed the same `derive_canopy_columns` routine documented under Tree canopy above.
+`canopy_pct` is canopy (Chesapeake classes 3, 10, 11, 12, including canopy overhanging
+structures and pavement) divided by classified land, with water and unclassified
+nodata excluded from the denominator. `natural_canopy_pct` restricts the numerator to
+class 3, canopy not over impervious surfaces, the more conservative green-space
+reading. Summer surface temperature and NDVI are the area-weighted footprint means of
+the 30 m Landsat summer-median stack (`mean_lst`, `mean_ndvi`). The Maryland and DC
+1 m land-cover rasters are held separately and each building subset is reprojected to
+its own raster's coordinate system before extraction; distances and buffers are in
+metres (NAD83 Maryland State Plane, EPSG:26985).
 
 ```{mermaid}
 flowchart TD
-  A["Building footprint"] --> B["Chesapeake 1 m<br/>-> canopy_pct"]
-  A --> C["Landsat summer median<br/>-> mean_lst, mean_ndvi"]
-  B --> E["Typed building<br/>+ environment table"]
-  C --> E
+  A["Building footprint<br/>(median ~2,675 m²)"] --> B["exactextract<br/>area-weighted overlap"]
+  B --> C["Chesapeake 1 m land cover<br/>-> canopy_pct, natural_canopy_pct"]
+  B --> D["Landsat summer median 30 m<br/>-> mean_lst, mean_ndvi"]
+  C --> E["Building environment table<br/>keyed on building_id"]
+  D --> E
 ```
+
+**Optional buffer.** A ring can be added around the footprint with `--buffer N`
+(N metres) before extraction, so the measure reflects the building's immediate green
+context rather than only its own roof and pavement. The buffer applies to the canopy
+and Landsat extraction; it is not part of the cache key, so a buffered run is paired
+with a forced recompute.
+
+**Two honest differences from the areal measures.** First, the areal pipeline blanks
+out canopy for units whose classified land falls well short of the Census land area
+(open water, military installations masked to nodata), flagged as `canopy_reliable`.
+The parcel pipeline carries no such gate: a building footprint sits on developed land
+by construction, so the coverage problem that motivates the flag does not arise, but
+the flag is simply absent rather than checked. Second, the areal Landsat step reports
+a clear-observation count per unit as a reliability companion; the parcel step does
+not. Neither difference changes a value, but both are worth stating for a reader
+comparing the two tables.
+
+The dashboard renders each building as a point at its centroid rather than as its
+footprint polygon. The extraction is polygon-based and area-weighted; only the map
+marker is a point, to keep the browser payload small.
 
 A FEMA National Flood Hazard Layer overlay is coded (Special Flood Hazard Area
 intersection) but not yet in the dashboard: the current NFHL pull is partial, so a
@@ -379,7 +422,7 @@ loaded rather than shipped as an incomplete variable.
 
 The dashboard reports **descriptive associations only**: medians, spatial
 co-location, and correlations, no fitted model. Each building also carries ACS
-block-group covariates (income, poverty, education, race/ethnicity, density) as
+block-group covariates (income, poverty, education, race/ethnicity) as
 descriptors, but they are not entered into a regression here; the intent is an
 honest picture of where each housing type sits and how the scales relate, not an
 adjusted effect estimate. Five views, filterable by state, county (with an
@@ -387,13 +430,24 @@ unselect-all control), housing type, and environmental measure:
 
 - **Type map.** A block-group choropleth of the chosen environmental measure, with
   buildings as points colored by housing type on top. LIHTC buildings are drawn as a
-  distinct diamond marker so the subsidized stock is visible against the rest.
+  distinct diamond marker so the subsidized stock is visible against the rest. A
+  low-to-high value legend keyed to the choropleth's quantile breakpoints reads
+  alongside the housing-type key.
 - **Bivariate map (environment × LIHTC).** The areal view carried over from the first
   dashboard: block groups on a 3×3 grid crossing the environmental measure against
-  LIHTC units. Block groups in the worst-environment tertile *and* the top LIHTC
+  LIHTC units, with a 3×3 legend showing the color for each environment-by-LIHTC
+  combination. Block groups in the worst-environment tertile *and* the top LIHTC
   tertile, the "green-gap" co-location corner, are outlined in **red** and listed
   in a table below the map. This is spatial co-location, not evidence that LIHTC
   housing is treated worse.
+
+Both maps carry the block group's census context in the hover tooltip: median
+household income, poverty rate, share with a bachelor's degree or higher, the white
+non-Hispanic, Black non-Hispanic, and Hispanic population shares, median gross rent,
+and the share of renter units affordable at 60% AMI. The green-gap table lists the
+same columns, so each flagged high-risk block group carries its socioeconomic profile
+next to the environmental and LIHTC values. These are ACS 2022 5-year estimates;
+block groups too small for the Census to publish a reliable figure show blank.
 - **Type contrast.** The median environmental measure for each type, Maryland and DC
   shown separately (the type–environment relationship differs between them).
 - **Value × environment.** Value per unit against the environmental measure, with the

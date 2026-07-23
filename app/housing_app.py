@@ -79,6 +79,45 @@ BIVARIATE_9 = [
     "#c85a5a", "#985356", "#574249",   # env high (best)
 ]
 
+# Block-group census context surfaced in tooltips and the green-gap table. Each entry
+# is (column, short label, format). Formats: $ = dollars, % = percent, else plain.
+BG_DEMOG = [
+    ("median_income", "Median income", "$"),
+    ("poverty_rate", "Poverty rate", "%"),
+    ("pct_bachelors_plus", "Bachelor's+", "%"),
+    ("pct_white_nh", "White NH", "%"),
+    ("pct_black_nh", "Black NH", "%"),
+    ("pct_hispanic", "Hispanic", "%"),
+    ("median_gross_rent", "Median rent", "$"),
+    ("affordable_rent_share", "Affordable-rent share", "%"),
+]
+
+
+def _fmt_demog(value, fmt: str) -> str:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return "—"
+    if fmt == "$":
+        return f"${value:,.0f}"
+    if fmt == "%":
+        return f"{value:.1f}%"
+    return f"{value:g}"
+
+
+def _add_demog_tooltip_cols(frame):
+    """Add pre-formatted demographic string columns to a BG frame for the map tooltip.
+
+    Folium's GeoJsonTooltip prints raw field values, so the dollar/percent formatting
+    is baked in here. Returns (frame, tooltip_field_names, tooltip_aliases).
+    """
+    fields, aliases = [], []
+    for col, label, fmt in BG_DEMOG:
+        if col in frame.columns:
+            tip = f"_tip_{col}"
+            frame[tip] = [_fmt_demog(x, fmt) for x in frame[col]]
+            fields.append(tip)
+            aliases.append(label)
+    return frame, fields, aliases
+
 
 def _load_points() -> gpd.GeoDataFrame:
     with open(POINTS_GEOJSON) as f:
@@ -95,9 +134,15 @@ def _load_points() -> gpd.GeoDataFrame:
 
 
 def _load_bg() -> gpd.GeoDataFrame:
+    import pandas as pd
+
     with open(BG_GEOJSON) as f:
         gj = json.load(f)
-    return gpd.GeoDataFrame.from_features(gj["features"], crs="EPSG:4326")
+    gdf = gpd.GeoDataFrame.from_features(gj["features"], crs="EPSG:4326")
+    for c, _lbl, _f in BG_DEMOG:
+        if c in gdf.columns:
+            gdf[c] = pd.to_numeric(gdf[c], errors="coerce")
+    return gdf
 
 
 def _load_stats() -> dict:
@@ -158,6 +203,61 @@ def _type_legend_html() -> str:
         '<span style="font-size:12px">LIHTC building (diamond)</span></div>'
     )
     return f'<div style="padding:6px 2px"><b style="font-size:12px">Housing type</b>{items}</div>'
+
+
+def _ramp_legend_html(edges: np.ndarray, colors: list[str], label: str, unit: str) -> str:
+    """Horizontal low-to-high swatch legend keyed to the quantile breakpoints.
+
+    ``edges`` are the bin boundaries from ``_quantile_bins`` (len = n_colors + 1), so
+    the breakpoint values sit between adjacent swatches.
+    """
+    if not len(colors) or edges.size < 2:
+        return ""
+    u = f" {unit}" if unit else ""
+    swatches = "".join(
+        f'<div style="flex:1;height:12px;background:{c}"></div>' for c in colors
+    )
+    # Interior breakpoint values (skip the outer min/max) placed under the seams.
+    ticks = "".join(
+        f'<div style="flex:1;text-align:right;font-size:10px;color:#555">{e:.0f}</div>'
+        for e in edges[1:-1]
+    ) + '<div style="flex:1"></div>'
+    return (
+        f'<div style="padding:4px 2px"><div style="font-size:11px;font-weight:600">'
+        f'{label}{u}</div>'
+        f'<div style="display:flex;width:220px;border:1px solid #ccc">{swatches}</div>'
+        f'<div style="display:flex;width:220px">{ticks}</div>'
+        '<div style="display:flex;justify-content:space-between;width:220px;'
+        'font-size:10px;color:#888"><span>low</span><span>high</span></div></div>'
+    )
+
+
+def _bivariate_legend_html() -> str:
+    """3x3 key for the environment x LIHTC bivariate map, matching BIVARIATE_9."""
+    # Rows top-to-bottom are best->worst environment so the green-gap corner (worst
+    # env, most LIHTC) sits bottom-right, as on the map. BIVARIATE_9 is stored
+    # worst-env first, so iterate rows in reverse.
+    cells = ""
+    for e in (2, 1, 0):  # env class: 2=best (top) down to 0=worst (bottom)
+        for li in (0, 1, 2):  # LIHTC class low->high
+            color = BIVARIATE_9[e * 3 + li]
+            border = "2px solid #d7191c" if (e == 0 and li == 2) else "1px solid #fff"
+            cells += f'<div style="width:22px;height:22px;background:{color};box-sizing:border-box;border:{border}"></div>'
+    grid = (
+        f'<div style="display:grid;grid-template-columns:repeat(3,22px);width:66px">{cells}</div>'
+    )
+    return (
+        '<div style="padding:6px 2px;font-size:11px">'
+        '<div style="font-weight:600;margin-bottom:3px">Environment × LIHTC</div>'
+        '<div style="display:flex;align-items:flex-start;gap:6px">'
+        '<div style="writing-mode:vertical-rl;transform:rotate(180deg);'
+        'font-size:10px;color:#555;text-align:center">environment: better → worse</div>'
+        f'{grid}</div>'
+        '<div style="font-size:10px;color:#555;margin-top:2px;padding-left:22px">'
+        'LIHTC units: low → high</div>'
+        '<div style="font-size:10px;color:#d7191c;margin-top:3px">'
+        'Red corner = green-gap (worst env + most LIHTC)</div></div>'
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -296,18 +396,26 @@ def server(input, output, session):
                        zoom_start=9, tiles="CartoDB positron")
 
         edges, colors = _quantile_bins(bg[v].to_numpy(dtype="float64"), _ramp_for(v))
+        ramp_legend = ""
         if edges.size:
+            ramp_legend = _ramp_legend_html(edges, colors, ENV_LABELS[v],
+                                            ENV_VARS[v]["unit"])
+
             def color_for(x):
                 if x is None or (isinstance(x, float) and np.isnan(x)):
                     return "#00000000"
                 return colors[int(np.clip(np.digitize([x], edges[1:-1])[0], 0, len(colors) - 1))]
-            show_bg = bg[["GEOID", v, "geometry"]].copy()
+            demog_cols = [c for c, _, _ in BG_DEMOG if c in bg.columns]
+            show_bg = bg[["GEOID", "county", v, *demog_cols, "geometry"]].copy()
             show_bg[v] = show_bg[v].round(1)
+            show_bg, d_fields, d_aliases = _add_demog_tooltip_cols(show_bg)
             folium.GeoJson(
                 show_bg.to_json(),
                 style_function=lambda f: {"fillColor": color_for(f["properties"][v]),
                                           "color": "#bbb", "weight": 0.2, "fillOpacity": 0.7},
-                tooltip=folium.GeoJsonTooltip(fields=[v], aliases=[ENV_LABELS[v]]),
+                tooltip=folium.GeoJsonTooltip(
+                    fields=["county", v, *d_fields],
+                    aliases=["County", ENV_LABELS[v], *d_aliases]),
             ).add_to(m)
 
         # Non-LIHTC points as one GeoJson circle layer (light).
@@ -344,7 +452,9 @@ def server(input, output, session):
         m.fit_bounds([[miny, minx], [maxy, maxx]])
         m.get_root().width = "100%"
         m.get_root().height = "600px"
-        return ui.HTML(m.get_root()._repr_html_())
+        legend = (f'<div style="display:flex;gap:20px;align-items:flex-end;margin:4px 2px">'
+                  f'{ramp_legend}{_type_legend_html()}</div>')
+        return ui.HTML(legend + m.get_root()._repr_html_())
 
     # ---- bivariate classification (env x LIHTC), shared by map + table ----
     @reactive.calc
@@ -383,9 +493,11 @@ def server(input, output, session):
         minx, miny, maxx, maxy = bg.total_bounds
         m = folium.Map(location=[(miny + maxy) / 2, (minx + maxx) / 2],
                        zoom_start=9, tiles="CartoDB positron")
-        show = bg[["GEOID", "county", v, "lihtc_units_low_income", "_bi", "greengap",
-                   "geometry"]].copy()
+        demog_cols = [c for c, _, _ in BG_DEMOG if c in bg.columns]
+        show = bg[["GEOID", "county", v, "lihtc_units_low_income", *demog_cols,
+                   "_bi", "greengap", "geometry"]].copy()
         show[v] = show[v].round(1)
+        show, d_fields, d_aliases = _add_demog_tooltip_cols(show)
         folium.GeoJson(
             show.to_json(),
             style_function=lambda f: {
@@ -395,13 +507,13 @@ def server(input, output, session):
                 "fillOpacity": 0.8,
             },
             tooltip=folium.GeoJsonTooltip(
-                fields=["county", v, "lihtc_units_low_income", "greengap"],
-                aliases=["County", ENV_LABELS[v], "LIHTC units", "Green-gap?"]),
+                fields=["county", v, "lihtc_units_low_income", "greengap", *d_fields],
+                aliases=["County", ENV_LABELS[v], "LIHTC units", "Green-gap?", *d_aliases]),
         ).add_to(m)
         m.fit_bounds([[miny, minx], [maxy, maxx]])
         m.get_root().width = "100%"
         m.get_root().height = "560px"
-        return ui.HTML(m.get_root()._repr_html_())
+        return ui.HTML(_bivariate_legend_html() + m.get_root()._repr_html_())
 
     @render.ui
     def greengap_caption():
@@ -421,12 +533,19 @@ def server(input, output, session):
         if bg.empty or not bg["greengap"].any():
             return pd.DataFrame({"note": ["No green-gap block groups in the selection."]})
         v = input.env_var()
-        t = (bg[bg["greengap"]][["GEOID", "county", v, "lihtc_units_low_income"]]
+        demog_cols = [c for c, _, _ in BG_DEMOG if c in bg.columns]
+        t = (bg[bg["greengap"]][["GEOID", "county", v, "lihtc_units_low_income", *demog_cols]]
              .sort_values("lihtc_units_low_income", ascending=False).copy())
         t[v] = t[v].round(1)
-        t = t.rename(columns={"GEOID": "Block group", "county": "County",
-                              v: ENV_LABELS[v], "lihtc_units_low_income": "LIHTC units"})
-        return render.DataGrid(t, height="260px")
+        # Format the demographic columns so the table reads cleanly.
+        for col, _label, fmt in BG_DEMOG:
+            if col in t.columns:
+                t[col] = [_fmt_demog(x, fmt) for x in t[col]]
+        rename = {"GEOID": "Block group", "county": "County",
+                  v: ENV_LABELS[v], "lihtc_units_low_income": "LIHTC units"}
+        rename.update({col: label for col, label, _ in BG_DEMOG})
+        t = t.rename(columns=rename)
+        return render.DataGrid(t, height="300px")
 
     # ---- Tab 3: type contrast ----
     @render.ui
