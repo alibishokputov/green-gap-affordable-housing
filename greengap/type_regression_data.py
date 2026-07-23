@@ -168,6 +168,69 @@ ENV_MEASURES = {
     "mean_lst": "Summer surface temp (°C)",
     "mean_ndvi": "NDVI (vegetation)",
 }
+CORR_TYPES = ["subsidized", "noah", "market_rate"]
+
+
+def _type_correlations(b) -> dict:
+    """Correlation of each housing type with each environmental measure, two scales.
+
+    Building scale is the point-biserial correlation between a binary 'is this type'
+    indicator and the measure across all multifamily buildings (mathematically a
+    Pearson r with a 0/1 variable). Block-group scale is the Spearman correlation
+    between the type's share of a block group's multifamily units and the block
+    group's measure; this is the ecological counterpart, and it can differ in sign
+    from the building scale (the canopy paradox). Each cell carries r, n, and p.
+    """
+    from scipy.stats import pointbiserialr, spearmanr
+
+    out = {"building": {}, "block_group": {}}
+
+    # Building point-biserial.
+    for t in CORR_TYPES:
+        ind = (b["housing_type"] == t).astype(float)
+        out["building"][t] = {}
+        for m in ENV_MEASURES:
+            d = b.dropna(subset=[m])
+            ind_d = ind.loc[d.index]
+            # Point-biserial needs variation in both the indicator and the measure.
+            if len(d) < 3 or ind_d.nunique() < 2 or d[m].nunique() < 2:
+                out["building"][t][m] = None
+                continue
+            r, p = pointbiserialr(ind_d.to_numpy(), d[m].to_numpy())
+            out["building"][t][m] = {"r": round(float(r), 3), "p": float(p), "n": int(len(d))}
+
+    # Block-group unit-share vs measure. Shares are per-type units over total
+    # multifamily units in the block group; measures come from the areal table.
+    counts = (
+        b.dropna(subset=["GEOID"])
+        .assign(u=b["units"].fillna(0))
+        .pivot_table(index="GEOID", columns="housing_type", values="u",
+                     aggfunc="sum", observed=True, fill_value=0)
+    )
+    counts.columns = [str(c) for c in counts.columns]
+    total = counts[[c for c in CORR_TYPES if c in counts.columns]].sum(axis=1)
+    bg = gpd.read_parquet(PROCESSED_DATA_DIR / "bg_analysis.parquet").set_index("GEOID")
+    for t in CORR_TYPES:
+        out["block_group"][t] = {}
+        if t not in counts.columns:
+            continue
+        # Coerce to float: the pd.NA in the denominator makes the ratio object dtype
+        # (NAType), which neither astype(float) nor scipy's correlation can consume.
+        share = pd.to_numeric(
+            counts[t] / total.replace(0, pd.NA), errors="coerce"
+        ).dropna()
+        for m in ENV_MEASURES:
+            d = pd.to_numeric(bg[m], errors="coerce").reindex(share.index)
+            pair = pd.DataFrame({"share": share, "m": d}).dropna()
+            # spearmanr fails on a constant column; skip degenerate cells. Pass numpy
+            # arrays (not index-aligned Series) to avoid a scipy/numpy corrcoef quirk.
+            if len(pair) < 3 or pair["share"].nunique() < 2 or pair["m"].nunique() < 2:
+                out["block_group"][t][m] = None
+                continue
+            r, p = spearmanr(pair["share"].to_numpy(), pair["m"].to_numpy())
+            out["block_group"][t][m] = {"r": round(float(r), 3), "p": float(p),
+                                        "n": int(len(pair))}
+    return out
 
 
 def export_stats() -> Path:
@@ -187,7 +250,7 @@ def export_stats() -> Path:
     bg = gpd.read_parquet(PROCESSED_DATA_DIR / "bg_analysis.parquet")
 
     payload = {"env_measures": ENV_MEASURES, "building_medians": {}, "bg_corr": {},
-               "paradox": {}, "rent_validation": {}, "flood_share": {}}
+               "paradox": {}, "rent_validation": {}, "flood_share": {}, "type_corr": {}}
 
     # Building-level: median environment by housing type, per measure.
     for m in ENV_MEASURES:
@@ -201,6 +264,8 @@ def export_stats() -> Path:
         d = bg.dropna(subset=[m, "lihtc_units_low_income"])
         rho, p = spearmanr(d[m], d["lihtc_units_low_income"])
         payload["bg_corr"][m] = {"rho": round(float(rho), 3), "p": float(p), "n": int(len(d))}
+
+    payload["type_corr"] = _type_correlations(b)
 
     # The canopy paradox, quantified: LIHTC concentrates in lower-canopy block groups
     # even though LIHTC buildings are greener than market-rate multifamily.

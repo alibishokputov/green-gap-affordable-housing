@@ -466,6 +466,9 @@ next to the environmental and LIHTC values. These are ACS 2022 5-year estimates;
 block groups too small for the Census to publish a reliable figure show blank.
 - **Type contrast.** The median environmental measure for each type, Maryland and DC
   shown separately (the type–environment relationship differs between them).
+- **Type correlations.** A matrix of the correlation between each housing type and
+  each environmental measure, at two scales, plus a strip plot of the selected measure
+  by type. Discussed below.
 - **Value × environment.** Value per unit against the environmental measure, with the
   NOAH cutoff drawn as a horizontal line.
 - **Canopy paradox.** The building-scale and block-group-scale canopy results shown
@@ -474,6 +477,32 @@ block groups too small for the Census to publish a reliable figure show blank.
 The headline value box reports the raw **difference in medians** between NOAH and
 market-rate; a positive canopy value means NOAH sits at higher canopy. It is a
 descriptive difference, not a correlation or an adjusted estimate.
+
+## Correlating a categorical housing type with a continuous measure
+
+Housing type is categorical, so "the correlation between housing type and canopy" is
+not a single number. The Type correlations tab reports it in the two forms that are
+defined, one per scale.
+
+At the **building scale** the tab shows the **point-biserial correlation**: for each
+type, a binary indicator for "is this building of this type" is correlated with the
+environmental measure across all multifamily buildings. This is a Pearson correlation
+with a 0/1 variable, and it carries the sign of the between-type difference. A
+positive value means buildings of that type sit at higher values of the measure. The
+building point-biserial for NOAH and canopy, for instance, is positive, the same
+direction as the median contrast.
+
+At the **block-group scale** the tab shows the **Spearman correlation between the
+type's share of a block group's multifamily units and the block group's measure**.
+This is the ecological counterpart, two continuous quantities, and it answers a
+different question: across neighborhoods, does a higher concentration of this type go
+with higher or lower environmental values. The two scales can disagree in sign, which
+is the canopy paradox stated as a correlation rather than a comparison of means.
+
+Both are unconditional associations. They condition on nothing, so a nonzero
+correlation reflects where each type sits, not an effect of the type. Significance
+stars (p &lt; 0.05) are shown, but with several thousand buildings even small
+correlations clear that bar, so the sign and magnitude matter more than the star.
 
 ## The canopy paradox: two scales, both correct
 

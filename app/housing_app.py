@@ -308,6 +308,7 @@ app_ui = ui.page_sidebar(
                      ui.output_ui("greengap_caption"),
                      ui.output_data_frame("greengap_table")),
         ui.nav_panel("Type contrast", ui.output_ui("contrast")),
+        ui.nav_panel("Type correlations", ui.output_ui("correlations")),
         ui.nav_panel("Value × environment", ui.output_ui("scatter")),
         ui.nav_panel("Canopy paradox", ui.output_ui("paradox")),
     ),
@@ -595,6 +596,100 @@ def server(input, output, session):
         html.append('<div style="margin-top:12px;font-size:12px;color:#888">'
                     'Raw medians, no controls. Per state deliberately: the type–'
                     'environment relationship differs between MD and DC.</div></div>')
+        return ui.HTML("".join(html))
+
+    # ---- Type correlations: point-biserial (building) + unit-share (block group) ----
+    @render.ui
+    def correlations():
+        tc = STATS.get("type_corr")
+        if not tc:
+            return ui.div("Correlation stats not available.", class_="p-4 text-muted")
+        v = input.env_var()
+        measures = list(STATS["env_measures"])
+
+        def rcolor(r):
+            if r is None:
+                return "#f2f2f2", "#999"
+            # diverging: red negative, blue positive, intensity by |r|.
+            a = min(abs(r) / 0.3, 1.0)
+            base = (13, 71, 161) if r > 0 else (183, 28, 28)
+            bg = tuple(int(255 - (255 - c) * a) for c in base)
+            fg = "#fff" if a > 0.6 else "#222"
+            return f"rgb({bg[0]},{bg[1]},{bg[2]})", fg
+
+        def matrix_html(scale, title, note):
+            head = "".join(f'<th style="padding:4px 8px;font-size:11px;font-weight:600;'
+                           f'text-align:center">{ENV_LABELS[m].split(" (")[0]}</th>'
+                           for m in measures)
+            rows = ""
+            for t in TYPE_ORDER:
+                cells = ""
+                for m in measures:
+                    c = tc[scale].get(t, {}).get(m)
+                    r = c["r"] if c else None
+                    bg, fg = rcolor(r)
+                    txt = f"{r:+.2f}" if r is not None else "—"
+                    sig = "*" if (c and c["p"] < 0.05) else ""
+                    cells += (f'<td style="padding:5px 8px;text-align:center;background:{bg};'
+                              f'color:{fg};font-size:12px">{txt}{sig}</td>')
+                rows += (f'<tr><td style="padding:5px 8px;font-size:12px;font-weight:600">'
+                         f'{TYPE_LABELS[t].split(" (")[0]}</td>{cells}</tr>')
+            return (f'<div style="margin-bottom:14px"><div style="font-weight:600;'
+                    f'font-size:13px">{title}</div>'
+                    f'<div style="font-size:11px;color:#888;margin:2px 0 6px">{note}</div>'
+                    f'<table style="border-collapse:collapse"><tr>'
+                    f'<th></th>{head}</tr>{rows}</table></div>')
+
+        html = ['<div style="padding:12px 8px;font-family:system-ui">']
+        html.append('<div style="font-weight:600;margin-bottom:4px">Correlation of each '
+                    'housing type with each environmental measure</div>')
+        html.append('<div style="font-size:12px;color:#555;margin-bottom:12px">'
+                    'Red is negative, blue positive; * marks p &lt; 0.05. These are '
+                    'unconditional associations, not adjusted effects.</div>')
+        html.append(matrix_html(
+            "building",
+            "Building scale (point-biserial r)",
+            "Correlation between a binary is-this-type indicator and the measure, "
+            "across the ~5,364 buildings. Positive = this type sits at higher values."))
+        html.append(matrix_html(
+            "block_group",
+            "Block-group scale (unit-share Spearman)",
+            "Correlation between the type's share of a block group's multifamily units "
+            "and the block group's measure. The ecological counterpart; it can differ "
+            "in sign from the building scale (the canopy paradox)."))
+
+        # Strip plot of the selected measure by type (building scale), the visual
+        # companion to the building matrix column for that measure.
+        g = view().dropna(subset=[v])
+        if not g.empty:
+            w, h, pad = 620, 210, 46
+            vals = g[v].to_numpy(dtype="float64")
+            x0, x1 = float(np.nanmin(vals)), float(np.nanmax(vals))
+            xr = (x1 - x0) or 1.0
+            rows_y = {t: pad + i * 48 for i, t in enumerate(TYPE_ORDER)}
+            parts = [f'<svg viewBox="0 0 {w} {h}" width="100%" height="{h}" '
+                     'font-family="system-ui">']
+            for t in TYPE_ORDER:
+                sub = g[g["housing_type"] == t]
+                y = rows_y[t]
+                med = float(sub[v].median()) if len(sub) else None
+                for val in sub[v].to_numpy(dtype="float64"):
+                    cx = pad + (val - x0) / xr * (w - 2 * pad)
+                    parts.append(f'<circle cx="{cx:.1f}" cy="{y + (hash(str(val)) % 12) - 6}" '
+                                 f'r="1.6" fill="{TYPE_COLORS[t]}" fill-opacity="0.4"/>')
+                if med is not None:
+                    mx = pad + (med - x0) / xr * (w - 2 * pad)
+                    parts.append(f'<line x1="{mx:.1f}" y1="{y - 12}" x2="{mx:.1f}" '
+                                 f'y2="{y + 12}" stroke="#222" stroke-width="1.5"/>')
+                parts.append(f'<text x="4" y="{y + 3}" font-size="11">'
+                             f'{TYPE_LABELS[t].split(" (")[0]}</text>')
+            parts.append(f'<text x="{w / 2:.0f}" y="{h - 6}" text-anchor="middle" '
+                         f'font-size="11">{ENV_LABELS[v]} (points = buildings, bar = median)</text>')
+            parts.append("</svg>")
+            html.append('<div style="font-weight:600;font-size:13px;margin-top:6px">'
+                        f'{ENV_LABELS[v]} by housing type</div>')
+            html.append("".join(parts))
+        html.append("</div>")
         return ui.HTML("".join(html))
 
     # ---- Tab 4: value/unit x environment ----
