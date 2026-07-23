@@ -311,6 +311,7 @@ app_ui = ui.page_sidebar(
         ui.nav_panel("Type correlations", ui.output_ui("correlations")),
         ui.nav_panel("Value × environment", ui.output_ui("scatter")),
         ui.nav_panel("Canopy paradox", ui.output_ui("paradox")),
+        id="tab",
     ),
     title="Housing type × environment: multifamily rental (MD + DC)",
     fillable=True,
@@ -359,6 +360,10 @@ def server(input, output, session):
 
     @render.ui
     def legend():
+        # Show the legend that matches the active tab. The bivariate map's 3x3 key
+        # lives here rather than on the map so the map itself gets the full width.
+        if input.tab() == "Bivariate map (env × LIHTC)":
+            return ui.HTML(_bivariate_legend_html())
         return ui.HTML(_type_legend_html())
 
     # ---- value boxes ----
@@ -527,7 +532,8 @@ def server(input, output, session):
         m.fit_bounds([[miny, minx], [maxy, maxx]])
         m.get_root().width = "100%"
         m.get_root().height = "560px"
-        return ui.HTML(_bivariate_legend_html() + m.get_root()._repr_html_())
+        # Legend moved to the sidebar (see legend()) so the map gets full width.
+        return ui.HTML(m.get_root()._repr_html_())
 
     @render.ui
     def greengap_caption():
